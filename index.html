@@ -31,10 +31,41 @@
     overflow:hidden;
   }
   header{
-    padding:18px 28px 14px;
+    position:relative;
+    flex-shrink:0;
     border-bottom:1px solid var(--border);
     background:var(--paper);
-    flex-shrink:0;
+    overflow:hidden;
+    max-height:32px;
+    transition:max-height .22s ease;
+  }
+  header:hover,
+  header.expanded{
+    max-height:160px;
+  }
+  .header-peek{
+    height:32px;
+    display:flex;
+    align-items:center;
+    padding:0 28px;
+    font-family:var(--serif);
+    font-size:12.5px;
+    color:var(--ink-faint);
+    cursor:pointer;
+    user-select:none;
+    letter-spacing:.5px;
+    white-space:nowrap;
+  }
+  .header-peek::after{
+    content:'▾';
+    margin-left:6px;
+    font-size:9px;
+    opacity:.55;
+    transform:translateY(-1px);
+    display:inline-block;
+  }
+  .header-full{
+    padding:6px 28px 14px;
   }
   .brand{
     font-family:var(--serif);
@@ -98,7 +129,8 @@
     font-size:14px;
   }
   @media (max-width:640px){
-    header{padding:14px 16px 10px;}
+    .header-peek{padding:0 16px; font-size:11.5px;}
+    .header-full{padding:4px 16px 10px;}
     .brand{font-size:16px;margin-bottom:8px;}
     nav button{font-size:12.5px;padding:7px 12px;}
   }
@@ -106,9 +138,12 @@
 </head>
 <body>
 
-<header>
-  <div class="brand">学习工具集</div>
-  <nav id="tabs"></nav>
+<header id="siteHeader">
+  <div class="header-peek" id="headerPeek">学习工具集</div>
+  <div class="header-full">
+    <div class="brand">学习工具集</div>
+    <nav id="tabs"></nav>
+  </div>
 </header>
 
 <main id="main">
@@ -128,6 +163,8 @@ const STORAGE_KEY = 'hub-last-tab';
 const tabsEl = document.getElementById('tabs');
 const mainEl = document.getElementById('main');
 const emptyHint = document.getElementById('emptyHint');
+const headerEl = document.getElementById('siteHeader');
+const headerPeek = document.getElementById('headerPeek');
 const iframes = {};
 
 function loadTool(id){
@@ -136,6 +173,10 @@ function loadTool(id){
     btn.classList.toggle('active', btn.dataset.id === id);
   });
 
+  // 更新收起状态下显示的当前工具名
+  const tool = TOOLS.find(t => t.id === id);
+  if(headerPeek && tool) headerPeek.textContent = tool.label;
+
   // 隐藏空态提示
   if(emptyHint) emptyHint.style.display = 'none';
 
@@ -143,7 +184,6 @@ function loadTool(id){
   Object.values(iframes).forEach(f => f.classList.remove('active'));
 
   if(!iframes[id]){
-    const tool = TOOLS.find(t => t.id === id);
     const iframe = document.createElement('iframe');
     iframe.src = tool.src;
     iframe.title = tool.label;
@@ -153,6 +193,16 @@ function loadTool(id){
   iframes[id].classList.add('active');
 
   try{ localStorage.setItem(STORAGE_KEY, id); }catch(e){}
+
+  // 选好工具后自动收起导航栏，把空间让给内容
+  headerEl.classList.remove('expanded');
+}
+
+// 点击收起状态的提示条，可以点开(方便触屏设备，没有鼠标悬停)
+if(headerPeek){
+  headerPeek.addEventListener('click', () => {
+    headerEl.classList.toggle('expanded');
+  });
 }
 
 TOOLS.forEach(tool=>{
