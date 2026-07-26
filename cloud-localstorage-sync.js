@@ -18,6 +18,11 @@
  * 用法：
  *   <script src="../cloud-localstorage-sync.js" data-tool="graphic"></script>
  * 放在工具自己的 <script> 之前（越靠前越好，最好是 <head> 里第一个）。
+ *
+ * 如果某个工具有另一套专门的大数据同步机制（比如按模块分批同步），
+ * 可以加一个 data-exclude-prefix 属性，让这个通用同步脚本跳过那些 key，
+ * 不要跟专门的机制打架、也不要把大数据塞进本地存储占满配额：
+ *   <script src="../cloud-localstorage-sync.js" data-tool="graphic" data-exclude-prefix="tuitui-notes"></script>
  */
 (function () {
   var SUPABASE_URL = 'https://tfvgntgamixgzjjvumcy.supabase.co';
@@ -26,10 +31,18 @@
 
   var currentScript = document.currentScript;
   var TOOL_NAME = (currentScript && currentScript.dataset && currentScript.dataset.tool) || 'default';
+  var EXCLUDE_PREFIX = (currentScript && currentScript.dataset && currentScript.dataset.excludePrefix) || null;
+
+  function isExcluded(key){
+    return EXCLUDE_PREFIX && key.indexOf(EXCLUDE_PREFIX) === 0;
+  }
 
   // ---------- 1. 启动时同步拉取云端数据，写入 localStorage ----------
   try {
     var url = REST + '?tool_name=eq.' + encodeURIComponent(TOOL_NAME) + '&select=data_key,data_value';
+    if(EXCLUDE_PREFIX){
+      url += '&data_key=not.like.' + encodeURIComponent(EXCLUDE_PREFIX) + '*';
+    }
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, false); // 同步请求：必须等它做完，后面工具代码才能读到正确数据
     xhr.setRequestHeader('apikey', SUPABASE_KEY);
@@ -64,7 +77,7 @@
         return {
           tool_name: TOOL_NAME,
           data_key: key,
-          data_value: localStorage.getItem(key),
+          data_value: pendingSet[key],
           updated_at: new Date().toISOString()
         };
       });
@@ -97,17 +110,23 @@
   }
 
   Storage.prototype.setItem = function (key, value) {
-    _setItem.call(this, key, value);
-    if (this === window.localStorage) {
+    var localOk = true;
+    try{
+      _setItem.call(this, key, value);
+    }catch(e){
+      localOk = false; // 本地存储写不进去（比如配额满了）不要紧，本地缓存只是锦上添花，云端才是真正权威的数据源
+    }
+    if (this === window.localStorage && !isExcluded(key)) {
       delete pendingRemove[key];
-      pendingSet[key] = true;
+      pendingSet[key] = value;
       scheduleFlush();
     }
+    if(!localOk) return; // 本地没写成功就别假装成功了，直接结束（云端同步已经在上面排好队了）
   };
 
   Storage.prototype.removeItem = function (key) {
     _removeItem.call(this, key);
-    if (this === window.localStorage) {
+    if (this === window.localStorage && !isExcluded(key)) {
       delete pendingSet[key];
       pendingRemove[key] = true;
       scheduleFlush();
