@@ -23,7 +23,7 @@
   if (window.storage) return;
 
   var SUPABASE_URL = 'https://tfvgntgamixgzjjvumcy.supabase.co';
-  var SUPABASE_KEY = 'sb_publishable_MOESZFeY8xJwIA6gtKo_nA_6QRBsOUz';
+  var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRmdmdudGdhbWl4Z3pqanZ1bWN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNjUzMzAsImV4cCI6MjEwMDY0MTMzMH0.tY3_QXFtjwdPZEbmfEPr3QThGJMty3RMsZEj9nmr-Io';
   var REST = SUPABASE_URL + '/rest/v1/app_data';
   var TIMEOUT_MS = 6000;
 
