@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学习工具集</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F7F3EC;
+    --surface:#FFFEFB;
+    --ink:#2B2620;
+    --ink-soft:#6B6255;
+    --ink-faint:#A79E8F;
+    --border:#E4DCCB;
+    --accent:#B5502F;
+    --accent-soft:#F1E1D4;
+    --serif:"Noto Serif SC","Songti SC","STSong","SimSun",serif;
+    --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  header{
+    padding:18px 28px 14px;
+    border-bottom:1px solid var(--border);
+    background:var(--paper);
+    flex-shrink:0;
+  }
+  .brand{
+    font-family:var(--serif);
+    font-weight:700;
+    font-size:19px;
+    letter-spacing:1px;
+    color:var(--ink);
+    margin:0 0 12px;
+  }
+  nav{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  nav button{
+    font-family:var(--sans);
+    font-size:13.5px;
+    padding:8px 16px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--ink-soft);
+    border-radius:20px;
+    cursor:pointer;
+    transition:all .15s ease;
+    white-space:nowrap;
+  }
+  nav button:hover{
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  nav button.active{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#fff;
+    font-weight:600;
+  }
+  main{
+    flex:1;
+    position:relative;
+    background:var(--surface);
+  }
+  iframe{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    border:none;
+    display:none;
+    background:var(--surface);
+  }
+  iframe.active{
+    display:block;
+  }
+  .empty-hint{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    height:100%;
+    color:var(--ink-faint);
+    font-family:var(--serif);
+    font-size:14px;
+  }
+  @media (max-width:640px){
+    header{padding:14px 16px 10px;}
+    .brand{font-size:16px;margin-bottom:8px;}
+    nav button{font-size:12.5px;padding:7px 12px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">学习工具集</div>
+  <nav id="tabs"></nav>
+</header>
+
+<main id="main">
+  <div class="empty-hint" id="emptyHint">选择上方一个工具开始</div>
+</main>
+
+<script>
+const TOOLS = [
+  { id:'notebook',  label:'资料分析·错题本',   src:'tools/tool-notebook.html' },
+  { id:'memory',    label:'小分互换记忆卡',     src:'tools/tool-memory.html' },
+  { id:'graphic',   label:'图推错题整理',       src:'tools/tool-graphic.html' },
+  { id:'translate', label:'翻译推理知识点',     src:'tools/tool-translate.html' },
+  { id:'blocks',    label:'电子积木沙盒',       src:'tools/tool-blocks.html' },
+];
+
+const STORAGE_KEY = 'hub-last-tab';
+const tabsEl = document.getElementById('tabs');
+const mainEl = document.getElementById('main');
+const emptyHint = document.getElementById('emptyHint');
+const iframes = {};
+
+function loadTool(id){
+  // 更新按钮高亮
+  Array.from(tabsEl.children).forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.id === id);
+  });
+
+  // 隐藏空态提示
+  if(emptyHint) emptyHint.style.display = 'none';
+
+  // 懒加载:第一次点击某个 tab 才创建对应 iframe
+  Object.values(iframes).forEach(f => f.classList.remove('active'));
+
+  if(!iframes[id]){
+    const tool = TOOLS.find(t => t.id === id);
+    const iframe = document.createElement('iframe');
+    iframe.src = tool.src;
+    iframe.title = tool.label;
+    mainEl.appendChild(iframe);
+    iframes[id] = iframe;
+  }
+  iframes[id].classList.add('active');
+
+  try{ localStorage.setItem(STORAGE_KEY, id); }catch(e){}
+}
+
+TOOLS.forEach(tool=>{
+  const btn = document.createElement('button');
+  btn.textContent = tool.label;
+  btn.dataset.id = tool.id;
+  btn.onclick = () => loadTool(tool.id);
+  tabsEl.appendChild(btn);
+});
+
+// 恢复上次打开的工具，没有记录则默认打开第一个
+let lastTab = null;
+try{ lastTab = localStorage.getItem(STORAGE_KEY); }catch(e){}
+if(!TOOLS.some(t => t.id === lastTab)) lastTab = TOOLS[0].id;
+loadTool(lastTab);
+</script>
+
+</body>
+</html>

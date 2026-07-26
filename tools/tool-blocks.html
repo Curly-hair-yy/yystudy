@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电子积木沙盒</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; }
+  body { display: flex; flex-direction: column; background: #eef1f5; color: #2b2d33; }
+
+  /* ---------- 顶栏 ---------- */
+  #topbar {
+    display: flex; align-items: center; gap: 12px; padding: 8px 14px;
+    background: #ffffff; border-bottom: 1px solid #dde2ea; flex: 0 0 auto; flex-wrap: wrap;
+  }
+  #topbar h1 { font-size: 15px; font-weight: 600; margin-right: 6px; white-space: nowrap; }
+  .seg { display: flex; border: 1px solid #c7cfdb; border-radius: 8px; overflow: hidden; }
+  .seg button {
+    border: none; background: #f4f6f9; padding: 6px 12px; font-size: 13px; cursor: pointer; color: #444;
+    border-right: 1px solid #c7cfdb;
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button.on { background: #3565d9; color: #fff; }
+  .spacer { flex: 1; }
+  .tbtn {
+    border: 1px solid #c7cfdb; background: #f4f6f9; border-radius: 8px; padding: 6px 12px;
+    font-size: 13px; cursor: pointer; color: #333; white-space: nowrap;
+  }
+  .tbtn:hover { background: #e8edf5; }
+  .tbtn:disabled { opacity: 0.4; cursor: default; }
+  .tbtn.danger { color: #c0392b; }
+
+  /* ---------- 主体 ---------- */
+  #middle { flex: 1 1 auto; display: flex; min-height: 0; }
+
+  #leftPanel {
+    flex: 0 0 300px; display: flex; flex-direction: column; gap: 8px;
+    background: #ffffff; border-right: 1px solid #dde2ea; padding: 10px; overflow-y: auto;
+  }
+  #leftPanel h2 { font-size: 13px; font-weight: 600; color: #556; }
+  #editorView { width: 100%; height: 260px; border-radius: 10px; overflow: hidden; background: #dfe6ef; position: relative; flex: 0 0 auto; }
+  #editorView canvas { display: block; }
+
+  .paletteRow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .swatch {
+    width: 26px; height: 26px; border-radius: 6px; border: 2px solid rgba(0,0,0,0.15); cursor: pointer; padding: 0;
+  }
+  .swatch.on { border: 2px solid #111; box-shadow: 0 0 0 2px #fff inset; }
+  #customColor { width: 34px; height: 28px; border: 1px solid #c7cfdb; border-radius: 6px; background: #fff; cursor: pointer; padding: 1px; }
+
+  .fieldRow { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #445; }
+  .fieldRow input[type=range] { flex: 1; }
+  #layerLabel { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .hint { font-size: 12px; color: #8a93a3; line-height: 1.6; }
+
+  #finishBtn {
+    border: none; background: #2a9d8f; color: #fff; font-size: 14px; font-weight: 600;
+    border-radius: 10px; padding: 10px; cursor: pointer;
+  }
+  #finishBtn:hover { background: #24897d; }
+
+  #mainView { flex: 1 1 auto; position: relative; min-width: 0; }
+  #mainView canvas { display: block; }
+  #axisInset {
+    position: absolute; right: 10px; bottom: 10px; width: 92px; height: 92px;
+    background: rgba(255,255,255,0.65); border: 1px solid #d4dae4; border-radius: 10px; pointer-events: none;
+  }
+  #modeTag {
+    position: absolute; left: 10px; top: 10px; font-size: 12px; color: #445;
+    background: rgba(255,255,255,0.85); border: 1px solid #d4dae4; border-radius: 8px; padding: 4px 10px; pointer-events: none;
+  }
+
+  /* ---------- 底栏 ---------- */
+  #bottombar {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 14px; padding: 8px 14px;
+    background: #ffffff; border-top: 1px solid #dde2ea; flex-wrap: wrap;
+  }
+  #pieceList { display: flex; gap: 6px; overflow-x: auto; max-width: 34%; }
+  .chip {
+    display: flex; align-items: center; gap: 6px; border: 1px solid #c7cfdb; border-radius: 8px;
+    padding: 5px 10px; font-size: 13px; cursor: pointer; background: #f4f6f9; white-space: nowrap;
+  }
+  .chip.on { border-color: #3565d9; background: #e3ebfc; color: #1c3f9e; }
+  .chip .dot { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.25); }
+  #noPieceTip { font-size: 13px; color: #98a0af; }
+
+  .ctlGroup { display: flex; align-items: center; gap: 4px; }
+  .ctlGroup .lbl { font-size: 12px; color: #667; margin-right: 2px; white-space: nowrap; }
+  .ctl {
+    border: 1px solid #c7cfdb; background: #f8fafc; border-radius: 7px; min-width: 40px;
+    padding: 6px 7px; font-size: 12px; cursor: pointer; color: #223; white-space: nowrap;
+  }
+  .ctl:hover { background: #e8edf5; }
+  .ctl:disabled { opacity: 0.35; cursor: default; }
+  #delPieceBtn { color: #c0392b; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>电子积木沙盒</h1>
+  <div class="seg" id="modeSeg">
+    <button data-mode="select" class="on">选零件</button>
+    <button data-mode="block">改整块</button>
+    <button data-mode="face">改单面</button>
+  </div>
+  <div class="spacer"></div>
+  <button class="tbtn" id="undoBtn" disabled>↩ 撤销</button>
+  <button class="tbtn" id="redoBtn" disabled>↪ 重做</button>
+  <button class="tbtn" id="shotBtn">📷 截图</button>
+  <button class="tbtn danger" id="clearBtn">🗑 清空场景</button>
+</div>
+
+<div id="middle">
+  <div id="leftPanel">
+    <h2>① 搭零件(5×5×5 编辑区)</h2>
+    <div id="editorView"></div>
+    <h2>颜色</h2>
+    <div class="paletteRow" id="palette"></div>
+    <div class="fieldRow">
+      <span>图层(高度)</span>
+      <input type="range" id="layerSlider" min="0" max="4" step="1" value="0">
+      <span id="layerLabel">第 1 层</span>
+    </div>
+    <div class="hint">
+      点击空格子 = 加方块(用当前颜色)<br>
+      点击已有方块 = 删除(只对当前层生效,其它层变暗、点不到)<br>
+      拖拽 = 旋转编辑区视角<br>
+      鼠标悬停在本区域时,按 ↑/↓ 切换图层
+    </div>
+    <button id="finishBtn">✔ 完成此零件 → 进入主场景</button>
+    <div class="hint">
+      主场景中:「选零件」模式下按住零件直接拖动,任何方向都跟着鼠标走,自动对齐格子;左键拖空白处或右键拖任意位置 = 转视角。<br>
+      选中零件后可用方向键移动:←→=X,↑↓=Z,⇧+↑↓=升降(Y)。<br>
+      「改整块」「改单面」模式下,点击方块/面即刷成当前颜色。<br>
+      快捷键:⌘Z 撤销,⇧⌘Z 重做
+    </div>
+  </div>
+  <div id="mainView">
+    <div id="modeTag">模式:选零件</div>
+    <div id="axisInset"></div>
+  </div>
+</div>
+
+<div id="bottombar">
+  <span id="noPieceTip">还没有零件,先在左边搭一个吧</span>
+  <div id="pieceList"></div>
+  <div class="ctlGroup" id="moveGroup">
+    <span class="lbl">移动</span>
+    <button class="ctl" data-mv="-1,0,0">X−</button>
+    <button class="ctl" data-mv="1,0,0">X+</button>
+    <button class="ctl" data-mv="0,1,0">升 Y+</button>
+    <button class="ctl" data-mv="0,-1,0">降 Y−</button>
+    <button class="ctl" data-mv="0,0,-1">Z−</button>
+    <button class="ctl" data-mv="0,0,1">Z+</button>
+  </div>
+  <div class="ctlGroup" id="rotGroup">
+    <span class="lbl">旋转90°</span>
+    <button class="ctl" data-rot="x,1">X ↻</button>
+    <button class="ctl" data-rot="x,-1">X ↺</button>
+    <button class="ctl" data-rot="y,1">Y ↻</button>
+    <button class="ctl" data-rot="y,-1">Y ↺</button>
+    <button class="ctl" data-rot="z,1">Z ↻</button>
+    <button class="ctl" data-rot="z,-1">Z ↺</button>
+  </div>
+  <button class="ctl" id="delPieceBtn">删除零件</button>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ================= 常量 ================= */
+const EDIT_SIZE = 5;
+const MAIN_SIZE = 10;
+// BoxGeometry 材质顺序: +x, -x, +y, -y, +z, -z
+const FACE_ORDER = ['right', 'left', 'top', 'bottom', 'front', 'back'];
+const SHADE = { top: 1.0, bottom: 0.5, front: 0.82, back: 0.82, left: 0.66, right: 0.66 };
+const PRESET_COLORS = ['#f4a261', '#e63946', '#2a9d8f', '#457b9d', '#e9c46a',
+                       '#9b5de5', '#f1faee', '#8d99ae', '#ff70a6', '#6a994e'];
+
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+
+let currentColor = PRESET_COLORS[0];
+let clickMode = 'select';           // select | block | face
+let editorLayer = 0;
+let selectedPieceId = null;
+let pieceCounter = 0;
+
+/* editorBlocks: key "x,y,z" -> {pos:[x,y,z], baseColor, mesh} */
+const editorBlocks = new Map();
+/* pieces: [{id, name, cells:[{pos, baseColor, faceColors}], group, meshes}] */
+let pieces = [];
+
+/* ================= 方块构建 ================= */
+function faceColorHex(cell, face) {
+  if (cell.faceColors && cell.faceColors[face]) return cell.faceColors[face];
+  const c = new THREE.Color(cell.baseColor).multiplyScalar(SHADE[face]);
+  return '#' + c.getHexString();
+}
+/* 每个面用"填色 + 黑色描边"的贴图,相邻同色方块之间的分割线也清晰可见 */
+const texCache = new Map();
+function borderTexture(hex) {
+  if (texCache.has(hex)) return texCache.get(hex);
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = hex;
+  g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = 'rgba(20,20,20,0.9)';
+  g.lineWidth = 9;
+  g.strokeRect(4.5, 4.5, 119, 119);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  texCache.set(hex, t);
+  return t;
+}
+function makeCubeMesh(cell) {
+  const mats = FACE_ORDER.map(f => new THREE.MeshBasicMaterial({ map: borderTexture(faceColorHex(cell, f)) }));
+  const mesh = new THREE.Mesh(boxGeo, mats);
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x1a1a1a });
+  mesh.add(new THREE.LineSegments(edgeGeo, edgeMat));
+  mesh.userData.edgeMat = edgeMat;
+  mesh.position.set(cell.pos[0] + 0.5, cell.pos[1] + 0.5, cell.pos[2] + 0.5);
+  return mesh;
+}
+function refreshCubeMaterials(mesh, cell) {
+  FACE_ORDER.forEach((f, i) => {
+    mesh.material[i].map = borderTexture(faceColorHex(cell, f));
+    mesh.material[i].needsUpdate = true;
+  });
+}
+
+/* ================= 编辑区场景 ================= */
+const editorEl = document.getElementById('editorView');
+const eScene = new THREE.Scene();
+eScene.background = new THREE.Color(0xdfe6ef);
+const eCam = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+eCam.position.set(9, 8, 11);
+const eRenderer = new THREE.WebGLRenderer({ antialias: true });
+eRenderer.setPixelRatio(window.devicePixelRatio);
+editorEl.appendChild(eRenderer.domElement);
+const eControls = new OrbitControls(eCam, eRenderer.domElement);
+eControls.target.set(EDIT_SIZE / 2, 1.5, EDIT_SIZE / 2);
+eControls.enableDamping = true;
+eControls.maxDistance = 30;
+
+const eFloorGrid = new THREE.GridHelper(EDIT_SIZE, EDIT_SIZE, 0x9aa5b5, 0xb7c0cf);
+eFloorGrid.position.set(EDIT_SIZE / 2, 0, EDIT_SIZE / 2);
+eScene.add(eFloorGrid);
+const eLayerGrid = new THREE.GridHelper(EDIT_SIZE, EDIT_SIZE, 0x3565d9, 0x7d9be8);
+eScene.add(eLayerGrid);
+const eLayerPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(EDIT_SIZE, EDIT_SIZE),
+  new THREE.MeshBasicMaterial({ color: 0x3565d9, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false })
+);
+eLayerPlane.rotation.x = -Math.PI / 2;
+eScene.add(eLayerPlane);
+
+const ghostMat = new THREE.MeshBasicMaterial({ color: currentColor, transparent: true, opacity: 0.35, depthWrite: false });
+const ghost = new THREE.Mesh(boxGeo, ghostMat);
+ghost.visible = false;
+eScene.add(ghost);
+
+const editBox = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(EDIT_SIZE, EDIT_SIZE, EDIT_SIZE)),
+  new THREE.LineBasicMaterial({ color: 0xaab3c2, transparent: true, opacity: 0.6 })
+);
+editBox.position.set(EDIT_SIZE / 2, EDIT_SIZE / 2, EDIT_SIZE / 2);
+eScene.add(editBox);
+
+function updateLayerVisual() {
+  eLayerGrid.position.set(EDIT_SIZE / 2, editorLayer + 0.01, EDIT_SIZE / 2);
+  eLayerPlane.position.set(EDIT_SIZE / 2, editorLayer + 0.005, EDIT_SIZE / 2);
+  document.getElementById('layerLabel').textContent = `第 ${editorLayer + 1} 层`;
+  updateEditorDimming();
+}
+/* 非当前层的方块调暗+半透明,提示"点不到它" */
+function updateEditorDimming() {
+  for (const b of editorBlocks.values()) {
+    const active = b.pos[1] === editorLayer;
+    for (const m of b.mesh.material) { m.transparent = true; m.opacity = active ? 1 : 0.25; }
+    b.mesh.userData.edgeMat.transparent = true;
+    b.mesh.userData.edgeMat.opacity = active ? 1 : 0.25;
+  }
+}
+function setEditorLayer(v) {
+  editorLayer = Math.max(0, Math.min(EDIT_SIZE - 1, v));
+  document.getElementById('layerSlider').value = editorLayer;
+  updateLayerVisual();
+}
+updateLayerVisual();
+
+/* ================= 主场景 ================= */
+const mainEl = document.getElementById('mainView');
+const mScene = new THREE.Scene();
+mScene.background = new THREE.Color(0xf2f4f8);
+const mCam = new THREE.PerspectiveCamera(50, 1, 0.1, 300);
+mCam.position.set(16, 13, 19);
+const mRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+mRenderer.setPixelRatio(window.devicePixelRatio);
+mainEl.insertBefore(mRenderer.domElement, mainEl.firstChild);
+const mControls = new OrbitControls(mCam, mRenderer.domElement);
+mControls.target.set(MAIN_SIZE / 2, 2, MAIN_SIZE / 2);
+mControls.enableDamping = true;
+mControls.maxDistance = 90;
+// 右键拖拽 = 转视角(左键按在零件上是拖零件,按在空白处也是转视角)
+mControls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+
+const mFloorGrid = new THREE.GridHelper(MAIN_SIZE, MAIN_SIZE, 0x93a0b5, 0xc3cbd8);
+mFloorGrid.position.set(MAIN_SIZE / 2, 0, MAIN_SIZE / 2);
+mScene.add(mFloorGrid);
+const mainBox = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(MAIN_SIZE, MAIN_SIZE, MAIN_SIZE)),
+  new THREE.LineBasicMaterial({ color: 0xb8c2d2, transparent: true, opacity: 0.55 })
+);
+mainBox.position.set(MAIN_SIZE / 2, MAIN_SIZE / 2, MAIN_SIZE / 2);
+mScene.add(mainBox);
+
+/* ---------- 坐标轴角标 ---------- */
+const insetEl = document.getElementById('axisInset');
+const iRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+iRenderer.setPixelRatio(window.devicePixelRatio);
+iRenderer.setSize(92, 92);
+insetEl.appendChild(iRenderer.domElement);
+const iScene = new THREE.Scene();
+const iCam = new THREE.PerspectiveCamera(50, 1, 0.1, 20);
+function axisLabel(text, color, pos) {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.font = 'bold 40px sans-serif'; ctx.fillStyle = color;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, 32, 34);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }));
+  sp.scale.setScalar(0.62); sp.position.copy(pos);
+  return sp;
+}
+{
+  const mk = (dir, hex) => new THREE.ArrowHelper(dir, new THREE.Vector3(), 1.05, hex, 0.3, 0.16);
+  iScene.add(mk(new THREE.Vector3(1, 0, 0), 0xe63946));
+  iScene.add(mk(new THREE.Vector3(0, 1, 0), 0x2a9d8f));
+  iScene.add(mk(new THREE.Vector3(0, 0, 1), 0x3565d9));
+  iScene.add(axisLabel('X', '#e63946', new THREE.Vector3(1.45, 0, 0)));
+  iScene.add(axisLabel('Y', '#2a9d8f', new THREE.Vector3(0, 1.45, 0)));
+  iScene.add(axisLabel('Z', '#3565d9', new THREE.Vector3(0, 0, 1.45)));
+}
+
+/* ================= 零件管理 ================= */
+function pieceById(id) { return pieces.find(p => p.id === id); }
+
+function buildPieceGroup(p) {
+  const g = new THREE.Group();
+  p.meshes = [];
+  for (const cell of p.cells) {
+    const mesh = makeCubeMesh(cell);
+    mesh.userData.pieceId = p.id;
+    mesh.userData.cell = cell;
+    g.add(mesh);
+    p.meshes.push(mesh);
+  }
+  p.group = g;
+  mScene.add(g);
+}
+
+function worldCellsOf(p) {
+  return p.cells.map(c => {
+    const v = new THREE.Vector3(c.pos[0] + 0.5, c.pos[1] + 0.5, c.pos[2] + 0.5)
+      .applyQuaternion(p.group.quaternion).add(p.group.position);
+    return [Math.round(v.x - 0.5), Math.round(v.y - 0.5), Math.round(v.z - 0.5)];
+  });
+}
+
+function findSpawnOffset(cells) {
+  const occ = new Set();
+  for (const p of pieces) for (const w of worldCellsOf(p)) occ.add(w.join(','));
+  const maxX = Math.max(...cells.map(c => c.pos[0]));
+  const maxZ = Math.max(...cells.map(c => c.pos[2]));
+  for (let z = 0; z + maxZ < MAIN_SIZE; z++) {
+    for (let x = 0; x + maxX < MAIN_SIZE; x++) {
+      let ok = true;
+      for (const c of cells) {
+        if (occ.has(`${c.pos[0] + x},${c.pos[1]},${c.pos[2] + z}`)) { ok = false; break; }
+      }
+      if (ok) return new THREE.Vector3(x, 0, z);
+    }
+  }
+  return new THREE.Vector3(0, 0, 0);
+}
+
+function setSelected(id) {
+  selectedPieceId = id;
+  for (const p of pieces) {
+    const on = p.id === id;
+    for (const m of p.meshes) m.userData.edgeMat.color.set(on ? 0xff8800 : 0x1a1a1a);
+  }
+  refreshPieceList();
+  refreshCtlState();
+}
+
+/* ================= 撤销 / 重做(整体快照) ================= */
+const undoStack = [], redoStack = [];
+const MAX_UNDO = 100;
+
+function serialize() {
+  return JSON.stringify({
+    counter: pieceCounter,
+    editor: [...editorBlocks.values()].map(b => ({ pos: b.pos, baseColor: b.baseColor })),
+    pieces: pieces.map(p => ({
+      id: p.id, name: p.name,
+      cells: p.cells.map(c => ({ pos: c.pos, baseColor: c.baseColor, faceColors: c.faceColors || {} })),
+      position: p.group.position.toArray(),
+      quaternion: p.group.quaternion.toArray()
+    }))
+  });
+}
+function restore(json) {
+  const s = JSON.parse(json);
+  // 清编辑区
+  for (const b of editorBlocks.values()) eScene.remove(b.mesh);
+  editorBlocks.clear();
+  for (const b of s.editor) addEditorBlockRaw(b.pos, b.baseColor);
+  // 清主场景
+  for (const p of pieces) mScene.remove(p.group);
+  pieces = [];
+  pieceCounter = s.counter;
+  for (const sp of s.pieces) {
+    const p = { id: sp.id, name: sp.name, cells: sp.cells };
+    buildPieceGroup(p);
+    p.group.position.fromArray(sp.position);
+    p.group.quaternion.fromArray(sp.quaternion);
+    pieces.push(p);
+  }
+  setSelected(null);
+}
+function pushUndo() {
+  undoStack.push(serialize());
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack.length = 0;
+  refreshUndoBtns();
+}
+function doUndo() {
+  if (!undoStack.length) return;
+  redoStack.push(serialize());
+  restore(undoStack.pop());
+  refreshUndoBtns();
+}
+function doRedo() {
+  if (!redoStack.length) return;
+  undoStack.push(serialize());
+  restore(redoStack.pop());
+  refreshUndoBtns();
+}
+function refreshUndoBtns() {
+  document.getElementById('undoBtn').disabled = !undoStack.length;
+  document.getElementById('redoBtn').disabled = !redoStack.length;
+}
+
+/* ================= 编辑区操作 ================= */
+function addEditorBlockRaw(pos, color) {
+  const cell = { pos: [...pos], baseColor: color, faceColors: {} };
+  const mesh = makeCubeMesh(cell);
+  mesh.userData.editKey = pos.join(',');
+  eScene.add(mesh);
+  editorBlocks.set(pos.join(','), { pos: [...pos], baseColor: color, mesh });
+  updateEditorDimming();
+}
+function editorRaycast(e) {
+  const rect = eRenderer.domElement.getBoundingClientRect();
+  const ndc = new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1
+  );
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(ndc, eCam);
+  // 只对"当前层"的方块判定点选/删除,其它层的方块不响应点击,避免误删已搭好的部分
+  const meshes = [...editorBlocks.values()].filter(b => b.pos[1] === editorLayer).map(b => b.mesh);
+  const hitCube = ray.intersectObjects(meshes, false)[0];
+  if (hitCube) return { type: 'cube', mesh: hitCube.object };
+  const hitPlane = ray.intersectObject(eLayerPlane, false)[0];
+  if (hitPlane) {
+    const x = Math.floor(hitPlane.point.x), z = Math.floor(hitPlane.point.z);
+    if (x >= 0 && x < EDIT_SIZE && z >= 0 && z < EDIT_SIZE) return { type: 'cell', pos: [x, editorLayer, z] };
+  }
+  return null;
+}
+function onEditorClick(e) {
+  const hit = editorRaycast(e);
+  if (!hit) return;
+  if (hit.type === 'cube') {
+    pushUndo();
+    editorBlocks.delete(hit.mesh.userData.editKey);
+    eScene.remove(hit.mesh);
+  } else if (!editorBlocks.has(hit.pos.join(','))) {
+    pushUndo();
+    addEditorBlockRaw(hit.pos, currentColor);
+  }
+  ghost.visible = false;
+}
+eRenderer.domElement.addEventListener('pointermove', e => {
+  const hit = editorRaycast(e);
+  if (hit && hit.type === 'cell') {
+    ghost.visible = true;
+    ghost.position.set(hit.pos[0] + 0.5, hit.pos[1] + 0.5, hit.pos[2] + 0.5);
+    ghostMat.color.set(currentColor);
+  } else ghost.visible = false;
+});
+eRenderer.domElement.addEventListener('pointerleave', () => { ghost.visible = false; });
+
+function finishPiece() {
+  if (!editorBlocks.size) { alert('编辑区还是空的,先点几个方块吧'); return; }
+  pushUndo();
+  const blocks = [...editorBlocks.values()];
+  const min = [Infinity, Infinity, Infinity];
+  for (const b of blocks) for (let i = 0; i < 3; i++) min[i] = Math.min(min[i], b.pos[i]);
+  const cells = blocks.map(b => ({
+    pos: [b.pos[0] - min[0], b.pos[1] - min[1], b.pos[2] - min[2]],
+    baseColor: b.baseColor, faceColors: {}
+  }));
+  pieceCounter++;
+  const p = { id: 'piece_' + pieceCounter, name: '零件 ' + pieceCounter, cells };
+  buildPieceGroup(p);
+  p.group.position.copy(findSpawnOffset(cells));
+  pieces.push(p);
+  for (const b of blocks) eScene.remove(b.mesh);
+  editorBlocks.clear();
+  setSelected(p.id);
+}
+
+/* ================= 主场景点击 ================= */
+function mainRay(e) {
+  const rect = mRenderer.domElement.getBoundingClientRect();
+  const ndc = new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1
+  );
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(ndc, mCam);
+  return ray;
+}
+function mainHit(e) {
+  const meshes = pieces.flatMap(p => p.meshes);
+  return mainRay(e).intersectObjects(meshes, false)[0];
+}
+function onMainClick(e) {
+  const hit = mainHit(e);
+
+  if (clickMode === 'select') {
+    setSelected(hit ? hit.object.userData.pieceId : null);
+    return;
+  }
+  if (!hit) return;
+  const cell = hit.object.userData.cell;
+  if (clickMode === 'block') {
+    pushUndo();
+    cell.baseColor = currentColor;
+    cell.faceColors = {};       // 整块改色时清掉之前的单面覆盖色
+    refreshCubeMaterials(hit.object, cell);
+  } else if (clickMode === 'face') {
+    pushUndo();
+    const face = FACE_ORDER[hit.face.materialIndex];   // 局部坐标系下的面,随零件旋转自动跟走
+    cell.faceColors = cell.faceColors || {};
+    cell.faceColors[face] = currentColor;
+    refreshCubeMaterials(hit.object, cell);
+  }
+}
+
+/* ================= 零件移动 / 旋转 / 删除 ================= */
+/* 当前朝向下,零件本地最低点的 y(用于限制不掉到地面以下) */
+function localMinY(p) {
+  let m = Infinity;
+  for (const c of p.cells) {
+    const v = new THREE.Vector3(c.pos[0] + 0.5, c.pos[1] + 0.5, c.pos[2] + 0.5).applyQuaternion(p.group.quaternion);
+    m = Math.min(m, v.y - 0.5);
+  }
+  return Math.round(m);
+}
+function clampAboveFloor(p) {
+  const worldMin = localMinY(p) + p.group.position.y;
+  if (worldMin < 0) p.group.position.y -= worldMin;
+}
+function movePiece(dx, dy, dz) {
+  const p = pieceById(selectedPieceId);
+  if (!p) return;
+  pushUndo();
+  const id = p.id;
+  p.group.position.add(new THREE.Vector3(dx, dy, dz));
+  clampAboveFloor(p);
+  selectedPieceId = id;
+}
+function rotatePiece(axis, dir) {
+  const p = pieceById(selectedPieceId);
+  if (!p) return;
+  pushUndo();
+  const axisVec = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) }[axis];
+  const q = new THREE.Quaternion().setFromAxisAngle(axisVec, dir * Math.PI / 2);
+  // 以零件包围盒中心(取整到格点)为轴心,保证旋转后仍对齐整数网格
+  const box = new THREE.Box3().setFromObject(p.group);
+  const pivot = box.getCenter(new THREE.Vector3()).round();
+  const newPos = p.group.position.clone().sub(pivot).applyQuaternion(q).add(pivot);
+  p.group.quaternion.premultiply(q);
+  p.group.position.copy(newPos.round());
+  clampAboveFloor(p);
+}
+function deletePiece() {
+  const p = pieceById(selectedPieceId);
+  if (!p) return;
+  pushUndo();
+  mScene.remove(p.group);
+  pieces = pieces.filter(x => x.id !== p.id);
+  setSelected(null);
+}
+
+/* ================= UI ================= */
+const paletteEl = document.getElementById('palette');
+for (const c of PRESET_COLORS) {
+  const b = document.createElement('button');
+  b.className = 'swatch' + (c === currentColor ? ' on' : '');
+  b.style.background = c;
+  b.addEventListener('click', () => {
+    currentColor = c;
+    paletteEl.querySelectorAll('.swatch').forEach(s => s.classList.remove('on'));
+    b.classList.add('on');
+  });
+  paletteEl.appendChild(b);
+}
+const customColor = document.createElement('input');
+customColor.type = 'color'; customColor.id = 'customColor'; customColor.value = '#ff9500';
+customColor.title = '自定义颜色';
+customColor.addEventListener('input', () => {
+  currentColor = customColor.value;
+  paletteEl.querySelectorAll('.swatch').forEach(s => s.classList.remove('on'));
+});
+paletteEl.appendChild(customColor);
+
+document.getElementById('layerSlider').addEventListener('input', e => {
+  setEditorLayer(+e.target.value);
+});
+document.getElementById('finishBtn').addEventListener('click', finishPiece);
+
+const MODE_NAMES = { select: '选零件', block: '改整块(点方块上色)', face: '改单面(点面上色)' };
+document.getElementById('modeSeg').querySelectorAll('button').forEach(b => {
+  b.addEventListener('click', () => {
+    clickMode = b.dataset.mode;
+    document.getElementById('modeSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    document.getElementById('modeTag').textContent = '模式:' + MODE_NAMES[clickMode];
+  });
+});
+
+document.getElementById('undoBtn').addEventListener('click', doUndo);
+document.getElementById('redoBtn').addEventListener('click', doRedo);
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!pieces.length && !editorBlocks.size) return;
+  if (!confirm('清空主场景和编辑区,开始下一题?')) return;
+  pushUndo();
+  for (const p of pieces) mScene.remove(p.group);
+  pieces = [];
+  for (const b of editorBlocks.values()) eScene.remove(b.mesh);
+  editorBlocks.clear();
+  setSelected(null);
+});
+document.getElementById('shotBtn').addEventListener('click', () => {
+  mRenderer.render(mScene, mCam);
+  const a = document.createElement('a');
+  const t = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  a.download = `积木-${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}-${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}.png`;
+  a.href = mRenderer.domElement.toDataURL('image/png');
+  a.click();
+});
+
+document.querySelectorAll('#moveGroup .ctl').forEach(b =>
+  b.addEventListener('click', () => movePiece(...b.dataset.mv.split(',').map(Number))));
+document.querySelectorAll('#rotGroup .ctl').forEach(b => {
+  b.addEventListener('click', () => {
+    const [axis, dir] = b.dataset.rot.split(',');
+    rotatePiece(axis, +dir);
+  });
+});
+document.getElementById('delPieceBtn').addEventListener('click', deletePiece);
+
+function refreshPieceList() {
+  const listEl = document.getElementById('pieceList');
+  listEl.innerHTML = '';
+  document.getElementById('noPieceTip').style.display = pieces.length ? 'none' : '';
+  for (const p of pieces) {
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (p.id === selectedPieceId ? ' on' : '');
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = p.cells[0]?.baseColor || '#ccc';
+    chip.appendChild(dot);
+    chip.appendChild(document.createTextNode(p.name));
+    chip.addEventListener('click', () => setSelected(p.id === selectedPieceId ? null : p.id));
+    listEl.appendChild(chip);
+  }
+}
+function refreshCtlState() {
+  const on = !!pieceById(selectedPieceId);
+  document.querySelectorAll('#moveGroup .ctl, #rotGroup .ctl, #delPieceBtn')
+    .forEach(b => b.disabled = !on);
+}
+refreshPieceList();
+refreshCtlState();
+
+/* ---------- 点击 vs 拖拽 区分 ---------- */
+function addClickHandler(dom, fn) {
+  let sx = 0, sy = 0, down = false;
+  dom.addEventListener('pointerdown', e => { down = true; sx = e.clientX; sy = e.clientY; });
+  dom.addEventListener('pointerup', e => {
+    if (!down) return;
+    down = false;
+    if (Math.hypot(e.clientX - sx, e.clientY - sy) < 6) fn(e);
+  });
+}
+addClickHandler(eRenderer.domElement, onEditorClick);
+addClickHandler(mRenderer.domElement, onMainClick);
+
+/* ---------- 拖拽零件(选零件模式下按住零件直接拖) ---------- */
+let drag = null;
+mRenderer.domElement.addEventListener('pointerdown', e => {
+  if (clickMode !== 'select' || drag || !e.isPrimary) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return; // 右键留给转视角
+  const hit = mainHit(e);
+  if (!hit) return;
+  const p = pieceById(hit.object.userData.pieceId);
+  if (!p) return;
+  setSelected(p.id);
+  mControls.enabled = false;   // 拖零件时冻结视角旋转
+  // 在"面向相机的平面"上拖:零件全方位跟随鼠标,松手前逐格吸附
+  const normal = new THREE.Vector3();
+  mCam.getWorldDirection(normal);
+  drag = {
+    piece: p,
+    startPos: p.group.position.clone(),
+    grab: hit.point.clone(),
+    plane: new THREE.Plane().setFromNormalAndCoplanarPoint(normal, hit.point),
+    minY: -localMinY(p),   // 拖拽时 y 不低于此值(零件不掉到地面以下)
+    preState: serialize(),
+    moved: false
+  };
+  mRenderer.domElement.setPointerCapture(e.pointerId);
+});
+mRenderer.domElement.addEventListener('pointermove', e => {
+  if (!drag || !e.isPrimary) return;
+  const pt = new THREE.Vector3();
+  if (!mainRay(e).ray.intersectPlane(drag.plane, pt)) return;
+  const delta = pt.sub(drag.grab);
+  const step = new THREE.Vector3(Math.round(delta.x), Math.round(delta.y), Math.round(delta.z));
+  const np = drag.startPos.clone().add(step);
+  np.y = Math.max(np.y, drag.minY);
+  if (!np.equals(drag.piece.group.position)) {
+    drag.piece.group.position.copy(np);
+    drag.moved = true;
+  }
+});
+function endDrag() {
+  if (!drag) return;
+  mControls.enabled = true;
+  if (drag.moved && !drag.piece.group.position.equals(drag.startPos)) {
+    undoStack.push(drag.preState);
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+    redoStack.length = 0;
+    refreshUndoBtns();
+  }
+  drag = null;
+}
+mRenderer.domElement.addEventListener('pointerup', endDrag);
+mRenderer.domElement.addEventListener('pointercancel', endDrag);
+
+/* ---------- 快捷键 ---------- */
+let hoverEditor = false;
+document.getElementById('leftPanel').addEventListener('mouseenter', () => hoverEditor = true);
+document.getElementById('leftPanel').addEventListener('mouseleave', () => hoverEditor = false);
+
+const ARROWS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+window.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    e.shiftKey ? doRedo() : doUndo();
+    return;
+  }
+  if (!ARROWS.includes(e.key)) return;
+
+  // 鼠标悬停在左侧编辑区面板上时:↑/↓ 切换正在搭建的图层
+  if (hoverEditor) {
+    if (e.key === 'ArrowUp') { e.preventDefault(); setEditorLayer(editorLayer + 1); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); setEditorLayer(editorLayer - 1); }
+    return;
+  }
+  // 主场景「选零件」模式下,方向键移动选中的零件:←→=X,↑↓=Z,⇧+↑↓=Y(升降)
+  if (clickMode === 'select' && selectedPieceId) {
+    e.preventDefault();
+    if (e.key === 'ArrowLeft') movePiece(-1, 0, 0);
+    else if (e.key === 'ArrowRight') movePiece(1, 0, 0);
+    else if (e.key === 'ArrowUp') e.shiftKey ? movePiece(0, 1, 0) : movePiece(0, 0, -1);
+    else if (e.key === 'ArrowDown') e.shiftKey ? movePiece(0, -1, 0) : movePiece(0, 0, 1);
+  }
+});
+
+/* ================= 尺寸 & 渲染循环 ================= */
+function resize() {
+  const er = editorEl.getBoundingClientRect();
+  eRenderer.setSize(er.width, er.height);
+  eCam.aspect = er.width / er.height;
+  eCam.updateProjectionMatrix();
+  const mr = mainEl.getBoundingClientRect();
+  mRenderer.setSize(mr.width, mr.height);
+  mCam.aspect = mr.width / mr.height;
+  mCam.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+function animate() {
+  requestAnimationFrame(animate);
+  eControls.update();
+  mControls.update();
+  eRenderer.render(eScene, eCam);
+  mRenderer.render(mScene, mCam);
+  iCam.position.copy(mCam.position).sub(mControls.target).setLength(3.4);
+  iCam.lookAt(0, 0, 0);
+  iRenderer.render(iScene, iCam);
+}
+animate();
+
+/* 调试/测试接口(不影响正常使用) */
+window.__jimu = {
+  state: () => JSON.parse(serialize()),
+  selected: () => selectedPieceId,
+  undoDepth: () => undoStack.length
+};
+</script>
+</body>
+</html>
