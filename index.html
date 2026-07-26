@@ -77,29 +77,25 @@
   }
   nav{
     display:flex;
-    gap:6px;
+    gap:20px;
     flex-wrap:wrap;
   }
   nav button{
     font-family:var(--sans);
     font-size:13.5px;
-    padding:8px 16px;
-    border:1px solid var(--border);
-    background:var(--surface);
+    padding:8px 4px;
+    border:none;
+    background:none;
     color:var(--ink-soft);
-    border-radius:20px;
     cursor:pointer;
-    transition:all .15s ease;
+    transition:color .15s ease;
     white-space:nowrap;
   }
   nav button:hover{
-    border-color:var(--accent);
     color:var(--accent);
   }
   nav button.active{
-    background:var(--accent);
-    border-color:var(--accent);
-    color:#fff;
+    color:var(--accent);
     font-weight:600;
   }
   main{
