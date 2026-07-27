@@ -32,7 +32,7 @@
     --orange:#C4635F;  --orange-bg:#F8E7E4;
     --slate:#66788F;   --slate-bg:#EAEEF3;
 
-    --hl-yellow:#F9E9AE; --hl-green:#D3EAC4; --hl-blue:#C6DCF6; --hl-pink:#F8D3DE;
+    --hl-yellow:#F9E9AE; --hl-green:#D3EAC4; --hl-blue:#C6DCF6; --hl-pink:#F8D3DE; --hl-cream:#F3EADA; --hl-rose:#FCD4D8;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
@@ -1452,7 +1452,7 @@ let DATA = null;
 const ui = {activeTab:'framework', activeCat:null, openMistakes:new Set(), sumFilterCat:'all', hlPaletteOpen:false, highlightActive:false, highlightColor:null};
 let pendingImages = [];
 let pendingExamples = [];
-const HL_COLORS = ['yellow','green','blue','pink'];
+const HL_COLORS = ['yellow','green','blue','pink','cream','rose'];
 
 /* 例题兼容层：老数据是字符串（一行一条），新数据是 {text, images:[]} */
 function normExamples(arr){
