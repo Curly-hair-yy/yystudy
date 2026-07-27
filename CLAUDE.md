@@ -97,21 +97,22 @@ Supabase 项目，REST API endpoint：`https://tfvgntgamixgzjjvumcy.supabase.co/
 
 #### tool-quant.html 薄荷绿皮肤 `html[data-theme="mint"]`
 
-**⚠️ 最终确定版，不要再反复调整色值。** 经过多轮迭代（#158F6D → #9CC8C1 → #89B1AC → #7B9762 → #81B77B），最终确认以下变量：
+**⚠️ 最终确定版，不要再反复调整色值。** 经过多轮迭代，最终确认以下变量：
 
 | 变量 | 色值 | 色名 | 用途 |
 |------|------|------|------|
-| `--accent` | `#73AE52` | 青苹果绿 | 强调色：标题装饰字、标签、按钮、答案文字、导航高亮、悬停交互 |
-| `--accent-hover` | `#73AE52` | 同 accent | 悬停色（12 处 hover 规则），与强调色一致 |
-| `--tip-bg` | `#D8ECCE` | 同色系浅绿 | 「思维拓展」/TIPS 提示框背景色 |
+| `--accent` | `#C1E9D2` | 浅薄荷绿 | 强调色：标题装饰字、标签、按钮、答案文字、导航高亮、悬停交互 |
+| `--accent-hover` | `#C1E9D2` | 同 accent | 悬停色（12 处 hover 规则），与强调色一致 |
+| `--tip-bg` | `linear-gradient(135deg, #F3FAF8 0%, #C9E6E2 100%)` | 浅色渐变 | 「思维拓展」/TIPS 提示框背景 |
+| `.addhere` | `#5D9BEC` | 蓝色 | 卡片操作按钮（标记错题/编辑/删除），独立于 accent |
 
-派生变量：`--accent-soft:#E2F1DA` / `--tip:#73AE52` / `--coral:#73AE52` / `--coral-bg:#E2F1DA`。
+派生变量：`--accent-soft:#E7F6EF` / `--tip:#C1E9D2` / `--coral:#C1E9D2` / `--coral-bg:#E7F6EF`。
 
-`:root` 中 `--accent-hover: #E8317C`（粉），薄荷绿覆盖为 `#73AE52`。所有 hover 规则通过 `var(--accent-hover)` 引用，文艺粉和薄荷绿各自生效。
+`:root` 中 `--accent-hover: #E8317C`（粉），薄荷绿覆盖为 `#C1E9D2`。所有 hover 规则通过 `var(--accent-hover)` 引用，文艺粉和薄荷绿各自生效。
 
 其余所有变量（`--paper`、`--surface`、`--surface-alt`、`--ink`、`--ink-soft`、`--ink-faint`、`--border`、`--border-strong`、`--font-scale`、`--serif`、`--mono`、`--hl-*` 等）保持文艺粉皮肤原值，薄荷绿不覆盖。
 
-**关键 CSS 依赖**：`.pt-tips` 的 `background` 必须使用 `var(--tip-bg)` 而非 `var(--accent-soft)`（2026-07-27 修复），否则 `--tip-bg` 变量定义了也不会生效。
+**关键 CSS 依赖**：`.pt-tips` 的 `background` 必须使用 `var(--tip-bg)` 而非 `var(--accent-soft)`（2026-07-27 修复），否则 `--tip-bg` 变量定义了也不会生效。必须用 `background` 而非 `background-color`，否则渐变值不生效。
 
 ### 大文件
 
