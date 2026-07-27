@@ -23,7 +23,7 @@ fonts/
   ELEYANG-Soft-Bold.ttf  ← 工具内用作徽章/印章字体
   新海山峦.ttf
 data/
-  quant-data.json   ← 数量关系知识库（13 板块 / 33 分组 / 62 知识点）
+  quant-data.json   ← 数量关系知识库（13 板块 / 33 分组 / 62 知识点 / 76 例题，89KB）
 ```
 
 **⚠️ 四个主力工具（notebook / graphic / translate / quant）在项目根目录，不要移到 tools/ 子文件夹。** 之前有过一次误移又改回来的教训（commit `f81acbe`）。
@@ -97,7 +97,77 @@ Supabase 项目，REST API endpoint：`https://tfvgntgamixgzjjvumcy.supabase.co/
 
 ### 大文件
 
-不要读取 `data` 相关的数据文件（存在 12MB 的笔记数据）——搜索、查找时跳过这些文件。
+不要读取 `data` 相关的数据文件（`data/quant-data.json` 约 89KB，但只读不写即可）——搜索、查找时跳过这些文件。`data/raw-txt/` 已删除（commit `4889492`），不再存在。
+
+## 数量关系·知识点 (`tool-quant.html`)
+
+- 数据来源：22 份 PDF 讲义（四海·25 下半年数量关系随堂笔记），原始提取文本已删除
+- 数据文件：`data/quant-data.json`，结构 `categories → groups → points`，13 板块 / 33 分组 / 62 知识点 / 76 例题
+- 部分知识点带 `diagram` 字段（`type: "svg"` 或 `"mermaid"`），共 7 个图解
+- 三级结构和 tool-notebook.html 保持一致
+- 首次加载时自动将斜杠分数（`a/b`）转为 `[[a/b]]` 堆叠格式并写入 localStorage
+- 已加入 `index.html` 导航入口（`id: 'quant', label: '数量关系·知识点'`）
+- 提供速查索引独立页面、搜索浮层、公式表格/网格渲染、图形公式 SVG 图标等
+
+## 富文本标记系统
+
+`tool-quant.html`、`tool-notebook.html`、`tool-translate.html` 三个工具共享一套标记系统。`tool-graphic.html` 暂不接入。
+
+### 颜色调色板（统一 6 色）
+
+| 色名 | 变量 | 色值 |
+|------|------|------|
+| 粉 pastel | `--hl-pink` | `#F8D3DE` |
+| 黄 pastel | `--hl-yellow` | `#F9E9AE` |
+| 绿 pastel | `--hl-green` | `#D3EAC4` |
+| 蓝 pastel | `--hl-blue` | `#C6DCF6` |
+| 米 cream | `--hl-cream` | `#F3EADA` |
+| 玫红 rose | `--hl-rose` | `#FCD4D8` |
+
+JS 常量：`HL_COLORS = ['yellow','green','blue','pink','cream','rose']`
+
+### 标记类型
+
+| 类型 | 渲染标签 | 存储格式 | 说明 |
+|------|---------|---------|------|
+| 背景高亮 | `<mark class="hl hl-COLOR">` | `{{hl:COLOR\|text}}` | 背景色块 |
+| 下划线 | `<span class="hl-ul" data-hlc="COLOR">` | `{{ul:COLOR\|text}}` | 直线下划线 |
+| 波浪线 | `<span class="hl-wl" data-hlc="COLOR">` | `{{wl:COLOR\|text}}` | 波浪下划线 |
+
+高亮/下划线/波浪线可以共存叠加；下划线和波浪线互斥（同一段文字只能有一种划线样式）。
+
+### UI 入口
+
+- **tool-quant.html**：左侧 rail 星形图标 → 鼠标悬浮展开颜色+样式面板（`.hl-flyout`）；面板下方有撤销/恢复/橡皮擦独立图标
+- **tool-notebook.html**：顶部 nav 🖍 按钮 → 点击展开色板（`.hl-palette`）
+- **tool-translate.html**：TOC 底部 `.mark-tool` 按钮行 → 点击三角展开 `.mark-popover`
+
+### 撤销/重做
+
+统一 25 步撤销栈，覆盖：编辑内容修改、高亮/下划线/波浪线标记、橡皮擦操作、删除知识点、添加/编辑/删除错题、一键分数转换。按操作时间顺序后进先出。快捷键 Ctrl+Z / Ctrl+Shift+Z。
+
+### 渲染/序列化管线
+
+- `fracRender(str)`：存储格式 → HTML（`{{hl:...}}` → `<mark>`，`[[a/b]]` → 堆叠分数，`^text^` → 上标，`~text~` → 下标）
+- `serializeHl(el)`：DOM → 存储格式（反向）
+- `tryHighlightSelection()`：获取 Selection Range → 包裹 `<span>`/`<mark>` → 调用 `commitHlField`
+- `commitHlField(container)`：pushUndo → serializeHl → 写 DATA → saveData → render
+
+**⚠️ 标记 span 的 CSS 必须加 `color:inherit; font-size:inherit; font-weight:inherit`**，防止样式泄漏到父级元素。下划线颜色用 `data-hlc` 属性 + CSS 属性选择器实现，**不用 inline style**（浏览器对 CSS 变量在 inline style 中的解析不稳定）。
+
+## 已知历史踩坑记录
+
+1. **文件路径**：四个主力工具文件（notebook / graphic / translate / quant）在项目根目录，不要移到 `tools/` 子文件夹。曾误移又改回（commit `f81acbe`）。`tools/` 目录下只有 `tool-memory.html` 和 `tool-blocks.html`。
+
+2. **class 命名冲突**：高亮面板的 class（`#hlRailWrap` / `.hl-flyout` / `.pk-open`）和小索引滚动高亮的 class（`.mi-item.active`）必须完全独立，避免选择器冲突。曾因 `#hlRailWrap` 设置 `padding-right:220px` 导致 hover 区域与小索引重叠、误触发面板弹出。
+
+3. **标记 DOM 操作**：用 `Range.surroundContents()` + `Selection API` 精确包裹选区，**不要**用 `document.execCommand`（已废弃且行为不稳定）或整段替换 `innerHTML`。选区包裹时排除 `.frac` / `sup` / `sub` 内部（避免撕碎分数/上下标结构）。
+
+4. **渲染时机**：`commitHlField` 调用 `render()` 后会重建整个 `#app` 的 innerHTML。标记的视觉效果来自 `fracRender()` 重新生成的 HTML，不是来自 DOM 操作残留。如果序列化/反序列化管线出错，标记会泄漏到不该影响的范围。
+
+5. **小索引滚动高亮**：用"阅读锚点"判定（视口 35% 高度处），scroll 事件 + `requestAnimationFrame` 节流。三层结构只有知识点标题参与颜色变化，板块和分组标题固定黑色不参与。
+
+6. **工具间颜色同步**：曾出现 translate 用一套颜色、quant/notebook 用另一套的情况。现统一为 6 色标准色卡，三个工具保持一致。新增颜色时需同步更新四个位置：CSS 变量、`HL_COLORS` 数组、`mark.hl` 背景类、`hl-ul`/`hl-wl` 属性选择器。
 
 ## 小索引滚动高亮功能
 
@@ -136,8 +206,12 @@ Supabase 项目，REST API endpoint：`https://tfvgntgamixgzjjvumcy.supabase.co/
 
 ## 数据文件
 
-- `data/quant-data.json` — 数量关系知识库（13 板块 / 33 分组 / 62 知识点，89KB），是 tool-quant.html 的只读数据源。包含三级结构 `categories → groups → points`，每个 point 有 `id / tag / title / core / formula / bullets / examples / tips / diagram` 字段
-- `data/raw-txt/` — PDF 提取中间文本文件（22 个 .txt，约 200KB），是生成 quant-data.json 的原始素材，量化工具已不再直接引用，可考虑清理
+- `data/quant-data.json` — 数量关系知识库（13 板块 / 33 分组 / 62 知识点 / 76 例题，89KB），是 tool-quant.html 的只读数据源。结构 `categories → groups → points`，point 字段：`id / tag / title / core / formula / bullets / examples(text+images) / tips / diagram(type+code)`。首次加载后自动将斜杠分数转为 `[[a/b]]` 堆叠格式并存入 localStorage。
+- `data/raw-txt/` — **已删除**（commit `4889492`）。原为 22 个 PDF 提取中间文本文件，quant-data.json 是唯一数据源。
+
+## 改动记录
+
+详细的功能开发和 bug 修复记录在 `CHANGELOG.md`。每次会话完成后追加一条日期条目。
 
 ## Deploy
 
