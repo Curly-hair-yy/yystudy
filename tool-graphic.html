@@ -1243,6 +1243,85 @@ const SUPA_URL = 'https://tfvgntgamixgzjjvumcy.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRmdmdudGdhbWl4Z3pqanZ1bWN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNjUzMzAsImV4cCI6MjEwMDY0MTMzMH0.tY3_QXFtjwdPZEbmfEPr3QThGJMty3RMsZEj9nmr-Io';
 // 说明：图推的笔记数据可能很大（带截图），如果整份一起同步，单次请求容易超过接口的大小限制。
 // 所以这里按模块（notes 对象的每个顶层 key）拆开，一个模块一个请求，互不影响。
+
+/* ============ IndexedDB 图片存储 ============ */
+const IDB_NAME='tkimg', IDB_STORE='imgs';
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open(IDB_NAME,1);
+    r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains(IDB_STORE)) r.result.createObjectStore(IDB_STORE); };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+}
+async function idbPut(id,dataUrl){
+  const db=await idbOpen();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).put(dataUrl,id);
+    tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);
+  });
+}
+async function idbGet(id){
+  const db=await idbOpen();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(IDB_STORE,'readonly');
+    const r=tx.objectStore(IDB_STORE).get(id);
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+}
+async function idbDel(id){
+  const db=await idbOpen();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).delete(id);
+    tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);
+  });
+}
+/* 迁移：base64 → IDB（首次运行自动执行） */
+const IDB_MIGRATED_KEY='tkimg_migrated';
+async function migrateImagesToIDB(){
+  if(localStorage.getItem(IDB_MIGRATED_KEY)) return;
+  let migrated=0;
+  for(const key of Object.keys(state.notes)){
+    for(const n of (state.notes[key]||[])){
+      if(!n.images||!n.images.length) continue;
+      const newImgs=[];
+      for(const src of n.images){
+        if(typeof src==='string'&&src.startsWith('data:')){
+          const id='img_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+          await idbPut(id,src); newImgs.push(id); migrated++;
+        }else{ newImgs.push(src); }
+      }
+      n.images=newImgs;
+    }
+  }
+  if(migrated>0){ saveLocalNotes(); }
+  try{ localStorage.setItem(IDB_MIGRATED_KEY,'1'); }catch(e){}
+}
+/* 渲染图片：IDB ID → blob URL → <img>（支持 base64 兼容） */
+async function idbRenderImg(idOrSrc){
+  if(!idOrSrc) return '';
+  if(typeof idOrSrc==='string'&&idOrSrc.startsWith('data:')) return idOrSrc; // 未迁移的 base64
+  try{
+    const dataUrl=await idbGet(idOrSrc);
+    return dataUrl||'';
+  }catch(e){ return ''; }
+}
+window._idbImgCache={};
+async function idbRenderImgs(ids,cls){
+  if(!ids||!ids.length) return '';
+  const parts=[];
+  for(const id of ids){
+    if(window._idbImgCache[id]){ parts.push(`<img src="${window._idbImgCache[id]}" class="${cls}">`); continue; }
+    const dataUrl=typeof id==='string'&&id.startsWith('data:')?id:(await idbGet(id)||'');
+    if(dataUrl){ window._idbImgCache[id]=dataUrl; parts.push(`<img src="${dataUrl}" class="${cls}">`); }
+  }
+  return parts.join('');
+}
+async function idbRenderNoteImgs(note){
+  return note&&note.images&&note.images.length ? `<div class="notes-img-row">${await idbRenderImgs(note.images,'note-img')}</div>` : '';
+}
+
 async function loadNotes(){
   const localNotes = loadLocalNotes();
   let artifactNotes = {};
@@ -1261,9 +1340,9 @@ async function loadNotes(){
 }
 async function saveNotes(){
   saveLocalNotes();
-  try{
-    const keys = Object.keys(state.notes);
-    await Promise.all(keys.map(k =>
+  // Supabase 同步改为后台异步，不阻塞 UI
+  const keys = Object.keys(state.notes);
+  Promise.all(keys.map(k =>
       fetch(SUPA_URL + '/rest/v1/app_data?on_conflict=tool_name,data_key', {
         method: 'POST',
         headers: {
@@ -1274,8 +1353,7 @@ async function saveNotes(){
         },
         body: JSON.stringify([{ tool_name:'graphic', data_key: CHUNK_PREFIX + k, data_value: JSON.stringify(state.notes[k]), updated_at: new Date().toISOString() }])
       }).catch(e=>console.warn('[graphic-sync] 模块同步失败：', k, e))
-    ));
-  }catch(e){ console.error(e); }
+    )).catch(e=>console.warn('[graphic-sync]',e));
 }
 
 function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
@@ -1459,7 +1537,7 @@ function noteCardHtml(key, n){
     <div class="txt">
       ${n.wrongBook?'<span class="wrongtag">错题</span>':''}${n.title?`<b>${esc(n.title)}</b>`:''}${n.ts?`<span class="note-date">${formatTs(n.ts)}</span>`:''}
       ${linkedKeys.length ? `<div class="note-links">${linkedKeys.map(k=>`<span class="note-link">${esc(topicLabelFromKey(k))}</span>`).join('')}</div>` : ''}
-      ${getNoteImages(n).map(src=>`<img src="${src}" class="note-img" alt="补充图片" data-note-id="${n.id}">`).join('')}
+      ${getNoteImages(n).map(src=>`<img src="${src}" class="note-img" alt="补充图片" data-note-id="${n.id}" loading="lazy">`).join('')}
       ${esc(n.content)}
     </div>
     <div class="note-actions">
@@ -2550,6 +2628,15 @@ document.getElementById('saveAdd').onclick=async()=>{
   if(btn.disabled) return;
   btn.disabled = true; const origText = btn.textContent; btn.textContent = '保存中…';
   try{
+    // 把 pendingImages 的 data URL 存入 IDB，获取 ID
+    const imgIds=[];
+    for(const src of pendingImages){
+      if(typeof src==='string'&&src.startsWith('data:')){
+        const id='img_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+        await idbPut(id,src); imgIds.push(id);
+        window._idbImgCache[id]=src;
+      }else{ imgIds.push(src); }
+    }
     const selectedKeys = getSelectedTopicKeys();
     const title = document.getElementById('fTitle').value.trim();
     const content = document.getElementById('fContent').value.trim();
@@ -2566,7 +2653,7 @@ document.getElementById('saveAdd').onclick=async()=>{
         wrongBook,
         updatedAt: Date.now(),
         topicKeys: selectedKeys,
-        images: pendingImages.slice(),
+        images: imgIds,
         image: null
       };
       removeNoteEverywhere(noteId);
@@ -2575,7 +2662,7 @@ document.getElementById('saveAdd').onclick=async()=>{
         state.notes[key].push({...updated});
       });
     } else {
-      const note = { id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), title, content, ts: Date.now(), images: pendingImages.slice(), wrongBook, topicKeys: selectedKeys };
+      const note = { id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), title, content, ts: Date.now(), images: imgIds, wrongBook, topicKeys: selectedKeys };
       selectedKeys.forEach(key=>{
         state.notes[key] = state.notes[key] || [];
         state.notes[key].push({...note});
