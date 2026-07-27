@@ -153,7 +153,7 @@ nav.tabs button.active .n{opacity:.85}
 .index-group-name.selected{background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:2px 6px;text-decoration:underline;text-underline-offset:3px}
 .index-badge.selected{box-shadow:0 0 0 2px var(--ink) inset,0 0 0 2px var(--ink);filter:brightness(1.15)}
 .note-card.wrong .txt b{color:var(--stamp)}
-.note-img{display:block;max-width:100%;max-height:220px;border-radius:8px;margin:6px 0;object-fit:contain;background:var(--surface-alt)}
+.note-img{display:block;max-width:100%;max-height:320px;border-radius:8px;margin:6px 0;object-fit:contain;background:var(--surface-alt);cursor:zoom-in}
 .wrongtag{display:inline-block;background:var(--surface);color:var(--stamp);font-size:calc(10.5px * var(--fs-scale));padding:1px 7px;border-radius:999px;margin-right:6px;font-weight:500;vertical-align:middle;border:0.5px solid var(--stamp)}
 .note-actions{display:flex;flex-direction:column;gap:5px;flex:none;align-items:flex-end}
 .note-actions button{border:none;background:transparent;color:var(--ink-faint);cursor:pointer;font-size:calc(11.5px * var(--fs-scale));white-space:nowrap;padding:0;font-family:var(--font-sans)}
@@ -230,7 +230,7 @@ nav.tabs button.active .n{opacity:.85}
 .face .hint{font-size:calc(12px * var(--fs-scale));color:var(--ink-faint);position:absolute;bottom:14px}
 .face.back .backtitle{font-size:calc(11.5px * var(--fs-scale));color:var(--ink-faint);margin-bottom:2px}
 .face.back .tips{width:100%;margin-top:12px;text-align:left}
-.card-note-img{display:block;max-width:100%;max-height:140px;border-radius:10px;margin:2px 0 10px;object-fit:contain;background:var(--surface-alt)}
+.card-note-img{display:block;max-width:100%;max-height:220px;border-radius:10px;margin:2px 0 10px;object-fit:contain;background:var(--surface-alt);cursor:zoom-in}
 .fc-actions{display:flex;gap:10px}
 .fc-actions button{border:0.5px solid var(--border-strong);background:var(--surface);padding:10px 18px;border-radius:999px;font-size:calc(13px * var(--fs-scale));cursor:pointer;display:flex;align-items:center;gap:6px}
 .fc-actions .know{color:var(--good)}
@@ -809,6 +809,24 @@ html.skin-pink .toolbar .btn:hover,
 html.skin-pink .toolbar .mode-switch button:hover{ color:var(--accent); background:none; }
 html.skin-pink .sticky-nav{ top:0; }
 
+/* 图片放大灯箱：图片区+右侧信息栏（标题+解析），移动端上下堆叠 */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:500;padding:24px}
+.lightbox.show{display:flex}
+.lightbox .lb-close{position:absolute;top:18px;right:24px;color:#fff;font-size:26px;cursor:pointer;z-index:501;opacity:.8}
+.lightbox .lb-close:hover{opacity:1}
+.lb-container{display:flex;gap:18px;max-width:96vw;max-height:90vh;align-items:flex-start}
+.lb-img-area{flex:1 1 auto;min-width:0;max-height:90vh;display:flex;align-items:center;justify-content:center}
+.lb-img-area img{max-width:100%;max-height:90vh;object-fit:contain;border-radius:8px;box-shadow:0 4px 30px rgba(0,0,0,.3)}
+.lb-info{width:340px;flex-shrink:0;max-height:90vh;overflow-y:auto;background:var(--surface);border-radius:10px;padding:20px;border:1px solid var(--border);color:var(--ink);font-family:var(--font-sans)}
+.lb-title{font-weight:700;font-size:calc(15.5px * var(--fs-scale));color:var(--ink);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.lb-content{font-size:calc(14px * var(--fs-scale));color:var(--ink);line-height:1.75;white-space:pre-wrap}
+@media(max-width:720px){
+  .lb-container{flex-direction:column;max-width:94vw;max-height:94vh;overflow-y:auto}
+  .lb-img-area{flex:0 0 auto;max-width:100%;max-height:55vh}
+  .lb-img-area img{max-height:55vh}
+  .lb-info{width:100%;flex-shrink:1;max-height:none;min-height:0}
+}
+
 </style>
 </head>
 <body>
@@ -1013,6 +1031,8 @@ html.skin-pink .sticky-nav{ top:0; }
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="lightbox" id="lightbox"><span class="lb-close" id="lbCloseBtn">✕</span><div class="lb-container"><div class="lb-img-area"><img id="lightbox-img"></div><div id="lightbox-info" class="lb-info"></div></div></div>
 
 <script>
 const KB = [
@@ -1259,6 +1279,24 @@ async function saveNotes(){
 
 function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 function isPinkSkin(){ return document.documentElement.classList.contains('skin-pink'); }
+function openLightbox(src, title, content){
+  document.getElementById('lightbox-img').src = src;
+  const info = document.getElementById('lightbox-info');
+  if(title || content){
+    info.innerHTML = `${title ? `<div class="lb-title">${esc(title)}</div>` : ''}${content ? `<div class="lb-content">${esc(content)}</div>` : ''}`;
+    info.style.display = '';
+  } else {
+    info.innerHTML = '';
+    info.style.display = 'none';
+  }
+  document.getElementById('lightbox').classList.add('show');
+}
+function closeLightbox(){
+  document.getElementById('lightbox').classList.remove('show');
+  document.getElementById('lightbox-img').src = '';
+  document.getElementById('lightbox-info').innerHTML = '';
+  document.getElementById('lightbox-info').style.display = '';
+}
 function pinkPageHeader(title, subtitle, count){
   if(!isPinkSkin()) return '';
   return `<div class="pk-pagehead"><h1>${esc(title)}</h1>${count ? `<span class="pk-count">${esc(count)}</span>` : ''}</div>
@@ -1420,7 +1458,7 @@ function noteCardHtml(key, n){
     <div class="txt">
       ${n.wrongBook?'<span class="wrongtag">错题</span>':''}${n.title?`<b>${esc(n.title)}</b>`:''}${n.ts?`<span class="note-date">${formatTs(n.ts)}</span>`:''}
       ${linkedKeys.length ? `<div class="note-links">${linkedKeys.map(k=>`<span class="note-link">${esc(topicLabelFromKey(k))}</span>`).join('')}</div>` : ''}
-      ${getNoteImages(n).map(src=>`<img src="${src}" class="note-img" alt="补充图片">`).join('')}
+      ${getNoteImages(n).map(src=>`<img src="${src}" class="note-img" alt="补充图片" data-note-id="${n.id}">`).join('')}
       ${esc(n.content)}
     </div>
     <div class="note-actions">
@@ -1712,6 +1750,11 @@ function bindTopicActions(el){
   el.querySelectorAll('.towrongoff').forEach(b=>b.onclick=async()=>{
     updateNoteEverywhere(b.dataset.id, { wrongBook:false });
     await saveNotes(); showToast('已移出错题本'); renderAll();
+  });
+  el.querySelectorAll('.note-img').forEach(img=>img.onclick=(e)=>{
+    e.stopPropagation();
+    const n = findNoteById(img.dataset.noteId);
+    openLightbox(img.src, n ? n.title : '', n ? n.content : '');
   });
 }
 
@@ -2038,6 +2081,10 @@ function renderCardsView(){
       </div>
     </div>`;
   bindCardControls(el);
+  el.querySelectorAll('.card-note-img').forEach(img=>img.onclick=(e)=>{
+    e.stopPropagation();
+    openLightbox(img.src, `${c.moduleName} · ${c.groupName}`, '');
+  });
 }
 
 function bindCardControls(el){
@@ -2436,6 +2483,9 @@ document.getElementById('acGroup').addEventListener('change', ()=>{
 document.getElementById('acCancelBtn').onclick=closeAddCardModal;
 document.getElementById('acSaveBtn').onclick=saveAddCard;
 document.getElementById('addCardOverlay').addEventListener('click', e=>{ if(e.target.id==='addCardOverlay') closeAddCardModal(); });
+document.getElementById('lbCloseBtn').onclick=closeLightbox;
+document.getElementById('lightbox').addEventListener('click', e=>{ if(e.target.id==='lightbox') closeLightbox(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && document.getElementById('lightbox').classList.contains('show')) closeLightbox(); });
 document.getElementById('fImage').addEventListener('change', async (e)=>{
   const files = Array.from(e.target.files||[]);
   if(!files.length) return;
