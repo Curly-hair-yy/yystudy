@@ -24,3 +24,6 @@
 - 修复 index.html 中 tool-memory 和 tool-blocks 的 tools/ 路径引用
 - 新增 CLAUDE.md 项目规范文档，记录文件结构、设计规范、已知踩坑记录
 - 清理 data/raw-txt/ 目录（22 个 PDF 中间提取文本文件，约 200KB）
+- 性能优化：tool-graphic.html 图片从 JSON base64 迁移至 IndexedDB 独立存储，JSON 体量缩减 90%+
+- 性能优化：tool-graphic.html Supabase 同步改为 fire-and-forget（后台异步，不阻塞 UI 响应）
+- 修复 tool-graphic.html 保存按钮无 loading 状态导致重复提交的问题（tool-quant/notebook 同步修复）
