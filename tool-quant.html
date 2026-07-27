@@ -19,6 +19,12 @@
     --hl-mint:#CFE9E2; --hl-rose:#FCD4D8; --hl-cream:#F3EADA; --hl-khaki:#EDDAC9; --hl-blue:#C6DCF6;
     --font-scale:1;
   }
+  /* 薄荷绿皮肤（覆盖强调色和提示框背景，其余继承文艺粉） */
+  html[data-theme="mint"]{
+    --accent:#158F6D; --accent-soft:#D5F5EF;
+    --tip:#158F6D; --tip-bg:#9DF2E8;
+    --coral:#158F6D; --coral-bg:#D5F5EF;
+  }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);line-height:1.6;-webkit-font-smoothing:antialiased;display:flex;align-items:flex-start;min-height:100vh;}
   ::-webkit-scrollbar{width:9px;height:9px;}
@@ -396,6 +402,7 @@
         <span id="fontSizeLabel" style="font-family:var(--mono);font-size:10px;color:var(--ink-soft);min-width:28px;text-align:center;">标准</span>
         <button id="btnFontUp" title="放大字号" style="width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;">A+</button>
       </div>
+      <button id="btnThemeToggle" title="切换皮肤">🎨 切换皮肤</button>
       <button id="btnExport" title="导出备份">💾 导出备份</button>
       <button id="btnImport" title="导入备份">📂 导入备份</button>
       <button id="btnUndo" title="撤销 (Ctrl+Z)">↩ 撤销</button>
@@ -839,6 +846,8 @@ async function loadData(){
   try{ const v=localStorage.getItem(FONT_KEY); if(v!=null) savedFont=parseInt(v); }catch(e){}
   if(isNaN(savedFont)||savedFont<0||savedFont>=FONT_LEVELS.length) savedFont=1;
   applyFontLevel(savedFont);
+  // 恢复皮肤
+  try{ const t=localStorage.getItem('quant_theme'); if(t==='mint') document.documentElement.setAttribute('data-theme','mint'); }catch(e){}
   render();
 }
 
@@ -1649,6 +1658,16 @@ function bindRailEvents(){
   // 字号调节
   document.getElementById('btnFontDown').onclick=e=>{ e.stopPropagation(); if(UI.fontLevel>0) applyFontLevel(UI.fontLevel-1); };
   document.getElementById('btnFontUp').onclick=e=>{ e.stopPropagation(); if(UI.fontLevel<FONT_LEVELS.length-1) applyFontLevel(UI.fontLevel+1); };
+  // 皮肤切换
+  document.getElementById('btnThemeToggle').onclick=e=>{
+    e.stopPropagation();
+    const cur=document.documentElement.getAttribute('data-theme');
+    const next=cur==='mint'?null:'mint';
+    if(next) document.documentElement.setAttribute('data-theme',next);
+    else document.documentElement.removeAttribute('data-theme');
+    try{ localStorage.setItem('quant_theme',next||''); }catch(e){}
+    showToast(next?'已切换为薄荷绿':'已切换为文艺粉');
+  };
 }
 
 function updateHlButton(){
