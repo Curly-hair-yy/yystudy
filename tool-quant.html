@@ -521,6 +521,11 @@ function serializeHl(el){
         out+=`{{wl:${color}|${serializeHl(node)}}}`;
       } else if(node.tagName==='SUP'){ out+=`^${serializeHl(node)}^`; }
       else if(node.tagName==='SUB'){ out+=`~${serializeHl(node)}~`; }
+      else if(node.classList&&node.classList.contains('ex-answer')){
+        out+=serializeHl(node);
+        const next=node.nextElementSibling;
+        if(next&&next.classList&&next.classList.contains('ex-analysis')) out+='。';
+      }
       else{ out+=serializeHl(node); }
     }
   });
@@ -871,7 +876,11 @@ function formatExample(text){
   let stem=qPart,opts='';
   if(optMatch){ opts=optMatch[1].trim(); stem=qPart.slice(0,qPart.indexOf(optMatch[1])).trim(); }
   let answer=aPart,analysis='';
-  if(aPart){ const pi=aPart.indexOf('。'); if(pi>0){ answer=aPart.slice(0,pi).trim(); analysis=aPart.slice(pi+1).trim(); } }
+  if(aPart){
+    const am=aPart.match(/^([A-D]{1,4})/);
+    if(am){ answer=am[1]; analysis=aPart.slice(am[1].length).replace(/^[。.．:：、\s]+/,'').trim(); }
+    else{ const pi=aPart.indexOf('。'); if(pi>0){ answer=aPart.slice(0,pi).trim(); analysis=aPart.slice(pi+1).trim(); } }
+  }
   let html='';
   if(stem) html+=`<div class="ex-stem">${fracRender(stem)}</div>`;
   if(opts) html+=`<div class="ex-opts">${fracRender(opts)}</div>`;
