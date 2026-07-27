@@ -110,15 +110,27 @@
   }
 
   Storage.prototype.setItem = function (key, value) {
+    // 浏览器原生 setItem 会自动把传入内容转成文字再存；这里换成了自己的实现，
+    // 必须手动补上这一步 —— 否则如果调用方不小心传进来 undefined/null
+    // （比如 JSON.stringify() 到一个还没准备好的变量上），本地那份靠原生方法
+    // 兜底还能囫囵存住，但发去云端的这份会是真的空值，被数据库的 NOT NULL
+    // 约束拒绝，且不会有任何提示，导致这次修改悄悄没同步上。
+    if (value === undefined || value === null) {
+      // 出现这种情况通常说明调用方哪里有 bug（比如存了一个还没准备好的变量），
+      // 现在会被存成字符串 "undefined"/"null" 而不是报错，容易悄悄覆盖掉真实数据，
+      // 所以在控制台留个警告方便定位。
+      console.warn('[cloud-sync] setItem("' + key + '") 收到了 ' + value + '，请检查调用方是否有 bug（正常情况下这里应该总是字符串）');
+    }
+    var strValue = String(value);
     var localOk = true;
     try{
-      _setItem.call(this, key, value);
+      _setItem.call(this, key, strValue);
     }catch(e){
       localOk = false; // 本地存储写不进去（比如配额满了）不要紧，本地缓存只是锦上添花，云端才是真正权威的数据源
     }
     if (this === window.localStorage && !isExcluded(key)) {
       delete pendingRemove[key];
-      pendingSet[key] = value;
+      pendingSet[key] = strValue;
       scheduleFlush();
     }
     if(!localOk) return; // 本地没写成功就别假装成功了，直接结束（云端同步已经在上面排好队了）
