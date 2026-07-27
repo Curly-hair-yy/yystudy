@@ -33,3 +33,7 @@
 - 修复 tool-notebook.html 因批量脚本 try/finally 语法错误导致页面白屏的严重 bug（回退到干净版本后手动重做安全改动）
 - 加深 tool-graphic.html 知识点描述文字(.module-sub)和左侧导航文字(.mi-item)颜色，从 #8C8C8C 调至 #6B6B6B，提升可读性
 - 新增薄荷绿主题皮肤（设置菜单「🎨 切换皮肤」），强调色 #158F6D 翡翠绿，提示框背景 #9DF2E8 薄荷蓝，其余变量复用文艺粉
+- 根据后续反馈，错题本操作按钮（编辑/加入错题本或移出错题本/删除）最终改回竖排三行、左对齐、行间距 8px（推翻了上一条"统一横排对齐"的方案）
+- 修复 tool-translate.html 高亮/下划线悬浮面板永远不显示的 bug：面板 DOM 上残留 `hidden=""` 属性，浏览器对 `[hidden]` 元素套用 `display:none` 且优先级高于任何 opacity/visibility 过渡，导致 CSS 的 hover/open 显示规则永远生效不了；JS 的 toggle 逻辑也从未处理过这个属性。以后排查"悬浮/弹出面板不出现"类问题，先检查元素本身有没有 `hidden` 属性或 `display:none` 的内联样式，不要只查 hover/opacity 相关 CSS 规则
+- 颜色方案改为以 tool-translate.html 的原始调色板为准：薄荷绿 #CFE9E2、雾玫瑰 #FCD4D8、奶油色 #F3EADA、卡其色 #EDDAC9 + 新增蓝色 #C6DCF6，共 5 色，替换此前"6 色"方案（黄/绿/蓝/粉/米/玫红），统一应用到 tool-quant.html、tool-notebook.html、tool-translate.html（tool-graphic.html 未接入高亮功能，未改动）；已保存数据里的旧色名（yellow/green/pink）自动映射到新色（khaki/mint/rose），不会丢失颜色
+- 调整薄荷绿主题配色：accent 改为柔和灰绿 #9CC8C1，tip-bg 改为浅雾蓝 #D6EEF2，废弃之前偏鲜艳的翡翠绿方案
