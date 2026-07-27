@@ -15,6 +15,7 @@
     --accent: #E8317C; --accent-soft: #FDEAF1; --accent-hover: #E8317C;
     --tip: #E8317C; --tip-bg: #FDF3F7; --coral: #E8317C; --coral-bg: #FDEAF1;
     --serif: "Noto Serif SC","Songti SC","STSong","SimSun",serif;
+    --sans: "PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",-apple-system,BlinkMacSystemFont,sans-serif;
     --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
     --hl-mint:#CFE9E2; --hl-rose:#FCD4D8; --hl-cream:#F3EADA; --hl-khaki:#EDDAC9; --hl-blue:#C6DCF6;
     --font-scale:1;
@@ -132,7 +133,7 @@
   /* 知识点分组 */
   .group{margin-bottom:28px;}
   .group-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--border);}
-  .group-head h2{font-family:var(--serif);font-size:16px;font-weight:800;margin:0;color:var(--ink);}
+  .group-head h2{font-family:var(--sans);font-size:16px;font-weight:700;margin:0;color:var(--ink);}
   .group-head .cnt{font-family:var(--mono);font-size:11px;color:var(--ink-faint);}
 
   /* 知识点卡片 */
@@ -1425,6 +1426,7 @@ function renderIndex(){
   const total=DATA.categories.reduce((s,c)=>s+c.groups.reduce((s2,g)=>s2+g.points.length,0),0);
   el.innerHTML=`
     <div class="cat-header"><h1>速查索引</h1><p class="cat-subtitle">${DATA.categories.length} 个板块 · ${total} 个知识点 · 点击标题跳转到对应知识点</p></div>
+    <div class="pk-waveline"></div>
     <div class="search-wrap">
       <span class="search-icon">🔍</span>
       <input type="text" id="indexSearchInput" placeholder="搜索知识点（按标题、标签）…" autocomplete="off">
