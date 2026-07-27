@@ -66,6 +66,12 @@
   var flushTimer = null;
 
   function flush() {
+    // 关键：先把 pendingSet 这个对象本身存一份引用下来（setEntries），
+    // 再把外层的 pendingSet 变量指向一个新的空对象。这两者是两个不同的对象。
+    // 之前这里直接在下面 map() 里读 pendingSet[key]，读到的是重新赋值之后
+    // 那个新空对象，永远是 undefined —— 导致每次同步发给云端的 data_value
+    // 全部是空的，百分之百会被数据库的 NOT NULL 约束拒绝。
+    var setEntries = pendingSet;
     var setKeys = Object.keys(pendingSet);
     var removeKeys = Object.keys(pendingRemove);
     pendingSet = {};
@@ -77,7 +83,7 @@
         return {
           tool_name: TOOL_NAME,
           data_key: key,
-          data_value: pendingSet[key],
+          data_value: setEntries[key],
           updated_at: new Date().toISOString()
         };
       });
