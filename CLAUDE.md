@@ -169,6 +169,8 @@ JS 常量：`HL_COLORS = ['yellow','green','blue','pink','cream','rose']`
 
 6. **工具间颜色同步**：曾出现 translate 用一套颜色、quant/notebook 用另一套的情况。现统一为 6 色标准色卡，三个工具保持一致。新增颜色时需同步更新四个位置：CSS 变量、`HL_COLORS` 数组、`mark.hl` 背景类、`hl-ul`/`hl-wl` 属性选择器。
 
+7. **批量脚本修改多文件后必须逐个验证语法**：曾用 Python 脚本给多个文件批量插入 `try/finally` 防重复提交代码，因文本匹配不精确，`tool-notebook.html` 出现了孤立 `finally` 块导致整个 JS 脚本解析失败、页面白屏。`tool-graphic.html` 当时被发现并修复了，但 `notebook` 被遗漏，直到用户反馈白屏才排查出来。教训：批量修改后必须对每个文件单独运行 `node --check` 验证 JS 语法，且要手动抽查关键函数的配对完整性（`try`/`catch`/`finally` 括号匹配）。
+
 ## 小索引滚动高亮功能
 
 四个工具都实现了左侧 sticky 迷你索引的滚动同步高亮，逻辑统一：
