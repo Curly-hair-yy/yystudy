@@ -469,91 +469,197 @@ function findPoint(pid){
 function findPointById(pid){ const fp=findPoint(pid); return fp?fp.point:null; }
 function mistakesForPoint(pid){ return DATA.mistakes.filter(m=>(m.tags||[]).includes(pid)); }
 
-/* 例题兼容层 */
+/* 例题兼容层：兼容三种历史形态（纯字符串数组 / {text,images} / {text,images,marks}），
+   已带 marks 数组的视为已迁移，直接透传；否则解析文本中残留的旧版 {{type:color|...}} 语法 */
 function normExamples(arr){
   const out=[];
   (arr||[]).forEach(ex=>{
-    if(typeof ex==='string'){ ex.split('\n').map(s=>s.trim()).filter(Boolean).forEach(t=>out.push({text:t,images:[]})); }
-    else if(ex&&typeof ex==='object'){ out.push({text:String(ex.text||''),images:Array.isArray(ex.images)?ex.images:[]}); }
+    if(typeof ex==='string'){
+      ex.split('\n').map(s=>s.trim()).filter(Boolean).forEach(t=>{
+        const parsed=parseLegacyMarkup(t);
+        out.push({text:parsed.text,images:[],marks:parsed.marks});
+      });
+    } else if(ex&&typeof ex==='object'){
+      if(Array.isArray(ex.marks)){
+        out.push({text:String(ex.text||''),images:Array.isArray(ex.images)?ex.images:[],marks:ex.marks});
+      } else {
+        const parsed=parseLegacyMarkup(String(ex.text||''));
+        out.push({text:parsed.text,images:Array.isArray(ex.images)?ex.images:[],marks:parsed.marks});
+      }
+    }
   });
   return out;
 }
 
-/* ================= 富文本渲染 ================= */
-function fracRender(str){
-  const escaped=esc(str);
-  const withHl=escaped.replace(/\{\{hl:([a-z]+)\|([\s\S]*?)\}\}/g,(m,color,inner)=>`<mark class="hl hl-${color}">${inner}</mark>`)
-    .replace(/\{\{ul:([a-z]+)\|([\s\S]*?)\}\}/g,(m,color,inner)=>`<span class="hl-ul" data-hlc="${color}">${inner}</span>`)
-    .replace(/\{\{wl:([a-z]+)\|([\s\S]*?)\}\}/g,(m,color,inner)=>`<span class="hl-wl" data-hlc="${color}">${inner}</span>`);
-  const cleaned=withHl.replace(/\[\[([^\/\[\]]+)\/([^\/\[\]]*?)\)([A-Za-z一-鿿0-9])/g,'[[$1/$2]])$3');
+/* ================= 富文本渲染（分数 / 上下标，跟标记系统无关，公式等纯字符串字段也用它） ================= */
+function fracSupSubHtml(escaped){
+  const cleaned=escaped.replace(/\[\[([^\/\[\]]+)\/([^\/\[\]]*?)\)([A-Za-z一-鿿0-9])/g,'[[$1/$2]])$3');
   const withFrac=cleaned.replace(/\[\[([^\[\]|\/]+)[|\/]([^\[\]|\/]+)\]\]/g,(m,num,den)=>`<span class="frac"><span class="frac-num">${num}</span><span class="frac-den">${den}</span></span>`);
   return withFrac.replace(/\^([A-Za-z0-9一-鿿+\-.%/()]{1,8})\^/g,'<sup>$1</sup>').replace(/~([A-Za-z0-9一-鿿+\-.%/()]{1,8})~/g,'<sub>$1</sub>').replace(/\[\[[^\]]*\]\]/g,'');
 }
+function fracRender(str){ return fracSupSubHtml(esc(str)); }
 
-/* ================= 高亮序列化 ================= */
+/* ================= 标记（高亮/下划线/波浪线）数据结构 =================
+   每个富文本字段存成 {text, marks:[{start,end,type,color}]}：
+   - type:'bg' 是背景高亮，type:'ul'/'wl' 是下划线/波浪线，两者是独立轨道，可以同时出现在同一段文字上
+   - 同一轨道内新标记会裁掉/覆盖旧标记重叠的部分（见 applyMarkOp），保证数据里同轨道内不会有重叠 mark，
+     渲染时不需要再处理"同一段文字被同轨道内多个标记覆盖"的情况 */
+function emptyRichText(){ return {text:'',marks:[]}; }
+function markChannel(type){ return type==='bg' ? 'bg' : 'deco'; } // ul/wl 同属装饰线轨道，互斥
+function applyMarkOp(marks,newMark){
+  const channel=markChannel(newMark.type);
+  const result=[];
+  (marks||[]).forEach(m=>{
+    if(markChannel(m.type)!==channel){ result.push(m); return; }
+    if(m.end<=newMark.start||m.start>=newMark.end){ result.push(m); return; }
+    if(m.start<newMark.start) result.push({...m,end:newMark.start});
+    if(m.end>newMark.end) result.push({...m,start:newMark.end});
+  });
+  result.push(newMark);
+  return result.sort((a,b)=>a.start-b.start);
+}
+function eraseMarksOp(marks,start,end){
+  const result=[];
+  (marks||[]).forEach(m=>{
+    if(m.end<=start||m.start>=end){ result.push(m); return; }
+    if(m.start<start) result.push({...m,end:start});
+    if(m.end>end) result.push({...m,start:end});
+  });
+  return result.sort((a,b)=>a.start-b.start);
+}
+
+/* 分数/上下标语法在原始文本里的位置，标记的起止不能落在这些 token 中间 */
+function findAtomicSpans(text){
+  const spans=[];
+  const re=/\[\[([^\[\]|\/]+)[|\/]([^\[\]|\/]+)\]\]|\^([A-Za-z0-9一-鿿+\-.%/()]{1,8})\^|~([A-Za-z0-9一-鿿+\-.%/()]{1,8})~/g;
+  let m;
+  while((m=re.exec(text))){ spans.push({start:m.index,end:m.index+m[0].length}); }
+  return spans;
+}
+function snapToAtomBoundary(pos,spans,dir){
+  for(const s of spans){ if(pos>s.start&&pos<s.end) return dir<0?s.start:s.end; }
+  return pos;
+}
+
+/* 渲染 {text,marks}：按所有 mark 的起止切成不重叠的小段，每段按 bg/装饰线两条轨道分别取覆盖它的 mark 叠加显示 */
+function renderMarked(field){
+  if(!field) return '';
+  const text=field.text||'';
+  if(!text) return '';
+  const marks=field.marks||[];
+  const cuts=new Set([0,text.length]);
+  marks.forEach(m=>{ cuts.add(Math.max(0,Math.min(m.start,text.length))); cuts.add(Math.max(0,Math.min(m.end,text.length))); });
+  const points=[...cuts].sort((a,b)=>a-b);
+  let html='';
+  for(let i=0;i<points.length-1;i++){
+    const segStart=points[i],segEnd=points[i+1];
+    if(segStart>=segEnd) continue;
+    const rendered=fracSupSubHtml(esc(text.slice(segStart,segEnd)));
+    const bg=marks.find(m=>m.type==='bg'&&m.start<=segStart&&m.end>=segEnd);
+    const deco=marks.find(m=>(m.type==='ul'||m.type==='wl')&&m.start<=segStart&&m.end>=segEnd);
+    if(!bg&&!deco){ html+=rendered; continue; }
+    const classes=[];
+    if(bg) classes.push('hl','hl-'+bg.color);
+    if(deco) classes.push('hl-'+deco.type);
+    const tag=bg?'mark':'span';
+    const hlcAttr=deco?` data-hlc="${deco.color}"`:'';
+    html+=`<${tag} class="${classes.join(' ')}"${hlcAttr}>${rendered}</${tag}>`;
+  }
+  return html;
+}
+
+/* ================= 旧格式迁移：把字符串里内嵌的 {{type:color|内容}} 语法解析成独立的 marks 记录 =================
+   用栈而不是正则整体替换：逐字符扫描，遇到"没有闭合的开标记"时只丢弃标记语法本身，
+   已经扫到的文字内容原样保留在 text 里，不会因为标记没闭合就丢字或把后面内容一起吞掉 */
+function parseLegacyMarkup(str){
+  str=String(str||'');
+  let out='';const marks=[];const stack=[];
+  const n=str.length;let i=0;
+  const OPEN_RE=/^\{\{(hl|ul|wl):([a-z]+)\|/;
+  while(i<n){
+    const om=OPEN_RE.exec(str.slice(i));
+    if(om){ stack.push({type:om[1]==='hl'?'bg':om[1],color:om[2],outStart:out.length}); i+=om[0].length; continue; }
+    if(str[i]==='}'&&str[i+1]==='}'&&stack.length){
+      const top=stack.pop();
+      marks.push({start:top.outStart,end:out.length,type:top.type,color:top.color});
+      i+=2; continue;
+    }
+    out+=str[i]; i+=1;
+  }
+  return {text:out,marks};
+}
+function migrateAllRichText(DATA){
+  let changed=false;
+  const migrateField=(container,key)=>{
+    const cur=container[key];
+    if(cur&&typeof cur==='object'&&Array.isArray(cur.marks)) return;
+    container[key]=parseLegacyMarkup(typeof cur==='string'?cur:'');
+    changed=true;
+  };
+  const migrateArr=(container,key)=>{
+    if(!Array.isArray(container[key])) return;
+    container[key]=container[key].map(v=>{
+      if(v&&typeof v==='object'&&Array.isArray(v.marks)) return v;
+      changed=true;
+      return parseLegacyMarkup(typeof v==='string'?v:'');
+    });
+  };
+  (DATA.categories||[]).forEach(c=>c.groups.forEach(g=>g.points.forEach(p=>{
+    migrateField(p,'core');
+    migrateArr(p,'bullets');
+    migrateArr(p,'tips');
+    if(p.examples){
+      const before=JSON.stringify(p.examples);
+      p.examples=normExamples(p.examples);
+      if(JSON.stringify(p.examples)!==before) changed=true;
+    }
+  })));
+  (DATA.mistakes||[]).forEach(m=>migrateField(m,'content'));
+  return changed;
+}
+
+/* ================= 高亮编辑：选区 → 字段内纯文本偏移，纯数据计算，算完一次性提交 ================= */
 function hlContainerOf(node){
   if(!node) return null;
   const el=node.nodeType===1?node:node.parentElement;
   return el?el.closest('[data-hlfield]'):null;
 }
+/* “叶子”是实际做偏移量计算的根：例题会被拆成题干/选项/答案/解析四个子块，
+   叶子必须精确到子块级别，否则一次选区没法对应到原始 text 里唯一的一段偏移 */
 function hlLeafOf(node,container){
   if(!container) return null;
   const el=node.nodeType===1?node:node.parentElement;
   if(!el||!container.contains(el)) return null;
-  const leaf=el.closest('li,.ex-text,.tip-line');
+  const leaf=el.closest('li,.tip-line,.ex-stem,.ex-opts,.ex-answer,.ex-analysis');
   if(leaf&&container.contains(leaf)) return leaf;
   return container;
 }
-function serializeHl(el){
-  let out='';
-  el.childNodes.forEach(node=>{
-    if(node.nodeType===3){ out+=node.nodeValue; }
-    else if(node.nodeType===1){
-      if(node.classList&&node.classList.contains('frac')){
-        const num=node.querySelector('.frac-num'),den=node.querySelector('.frac-den');
-        const n=num?num.textContent:'',d=den?den.textContent:'';
-        out+=(n&&d)?`[[${n}/${d}]]`:(n||d);
-      } else if(node.tagName==='MARK'&&node.classList.contains('hl')){
-        const cc=Array.from(node.classList).find(c=>c.startsWith('hl-'));
-        const color=cc?cc.slice(3):HL_COLORS[0];
-        out+=`{{hl:${color}|${serializeHl(node)}}}`;
-      } else if(node.classList&&node.classList.contains('hl-ul')){
-        const color=node.dataset.hlc||HL_COLORS[0];
-        out+=`{{ul:${color}|${serializeHl(node)}}}`;
-      } else if(node.classList&&node.classList.contains('hl-wl')){
-        const color=node.dataset.hlc||HL_COLORS[0];
-        out+=`{{wl:${color}|${serializeHl(node)}}}`;
-      } else if(node.tagName==='SUP'){ out+=`^${serializeHl(node)}^`; }
-      else if(node.tagName==='SUB'){ out+=`~${serializeHl(node)}~`; }
-      else if(node.classList&&node.classList.contains('ex-answer')){
-        out+=serializeHl(node);
-        const next=node.nextElementSibling;
-        if(next&&next.classList&&next.classList.contains('ex-analysis')) out+='。';
-      }
-      else{ out+=serializeHl(node); }
-    }
-  });
-  return out;
+/* 【答案】的标签文字是渲染时补上的装饰，不是字段原文的一部分，真正对应原文的是 .ex-ans-text 这个内层 span */
+function offsetRootOf(leaf){
+  if(leaf.classList&&leaf.classList.contains('ex-answer')){ return leaf.querySelector('.ex-ans-text')||leaf; }
+  return leaf;
 }
-function commitHlField(container){
-  const key=container.dataset.hlfield;
-  if(!key) return;
-  pushUndo();
+function offsetInContainer(container,node,nodeOffset){
+  const range=document.createRange();
+  range.selectNodeContents(container);
+  range.setEnd(node,nodeOffset);
+  return range.toString().length;
+}
+function getFieldByHlKey(key){
+  if(!key) return null;
   const parts=key.split(':');
   if(parts[0]==='point'){
-    const fp=findPoint(parts[1]); if(!fp) return;
+    const fp=findPoint(parts[1]); if(!fp) return null;
     const field=parts[2],idx=parts[3]!=null?Number(parts[3]):null;
-    if(field==='bullet'){ if(fp.point.bullets&&fp.point.bullets[idx]!=null) fp.point.bullets[idx]=serializeHl(container); }
-    else if(field==='example'){
-      const norm=normExamples(fp.point.examples);
-      if(norm[idx]){ norm[idx].text=serializeHl(container); fp.point.examples=norm; }
-    } else if(field==='tip'){ if(fp.point.tips&&fp.point.tips[idx]!=null) fp.point.tips[idx]=serializeHl(container); }
-    else{ fp.point[field]=serializeHl(container); }
+    if(field==='bullet') return (fp.point.bullets&&fp.point.bullets[idx])||null;
+    if(field==='example'){ fp.point.examples=normExamples(fp.point.examples); return fp.point.examples[idx]||null; }
+    if(field==='tip') return (fp.point.tips&&fp.point.tips[idx])||null;
+    return fp.point[field]||null;
   } else if(parts[0]==='mistake'){
-    const m=DATA.mistakes.find(m=>m.id===parts[1]); if(!m) return;
-    m.content=serializeHl(container);
+    const m=DATA.mistakes.find(m=>m.id===parts[1]); if(!m) return null;
+    return m.content||null;
   }
-  saveData(); render(); showToast('已高亮');
+  return null;
 }
 function tryHighlightSelection(){
   if(!UI.highlightActive||!UI.highlightColor) return;
@@ -564,37 +670,33 @@ function tryHighlightSelection(){
   if(!leafA||leafA!==leafF) return;
   const range=sel.getRangeAt(0);
   if(!container.contains(range.commonAncestorContainer)) return;
-  const atomOf=n=>{const el=n.nodeType===1?n:n.parentElement;return el?el.closest('.frac,sup,sub'):null;};
-  const sa=atomOf(range.startContainer); if(sa&&container.contains(sa)) range.setStartBefore(sa);
-  const ea=atomOf(range.endContainer); if(ea&&container.contains(ea)) range.setEndAfter(ea);
-  if(range.collapsed) return;
-  let wrapper;
-  if(UI.highlightStyle==='erase'){
-    // 橡皮擦：清除选中文字上的所有高亮/下划线标记
-    const frag=range.extractContents();
-    const div=document.createElement('div'); div.appendChild(frag);
-    // 递归移除所有标记元素，保留文字内容
-    function stripMarks(el){
-      const walker=document.createTreeWalker(el,NodeFilter.SHOW_ELEMENT);
-      const toUnwrap=[];
-      while(walker.nextNode()){
-        const n=walker.currentNode;
-        if(n.tagName==='MARK'||(n.classList&&(n.classList.contains('hl-ul')||n.classList.contains('hl-wl')))){
-          toUnwrap.push(n);
-        }
-      }
-      toUnwrap.forEach(n=>{ const p=n.parentNode; while(n.firstChild) p.insertBefore(n.firstChild,n); p.removeChild(n); });
-    }
-    stripMarks(div);
-    range.insertNode(document.createTextNode(div.textContent));
-  }else{
-    if(UI.highlightStyle==='ul'){ wrapper=document.createElement('span'); wrapper.className='hl-ul'; wrapper.dataset.hlc=UI.highlightColor; }
-    else if(UI.highlightStyle==='wl'){ wrapper=document.createElement('span'); wrapper.className='hl-wl'; wrapper.dataset.hlc=UI.highlightColor; }
-    else{ wrapper=document.createElement('mark'); wrapper.className='hl hl-'+UI.highlightColor; }
-    try{range.surroundContents(wrapper);}catch(e){const frag=range.extractContents();wrapper.appendChild(frag);range.insertNode(wrapper);}
-  }
+
+  const offsetRoot=offsetRootOf(leafA);
+  if(!offsetRoot.contains(range.startContainer)||!offsetRoot.contains(range.endContainer)){ sel.removeAllRanges(); return; }
+
+  const field=getFieldByHlKey(container.dataset.hlfield);
+  if(!field){ sel.removeAllRanges(); return; }
+
+  const base=Number(leafA.dataset.exoff||0);
+  let start=base+offsetInContainer(offsetRoot,range.startContainer,range.startOffset);
+  let end=base+offsetInContainer(offsetRoot,range.endContainer,range.endOffset);
+  if(start>end){ const t=start;start=end;end=t; }
+
+  const atoms=findAtomicSpans(field.text||'');
+  start=snapToAtomBoundary(start,atoms,-1);
+  end=snapToAtomBoundary(end,atoms,1);
   sel.removeAllRanges();
-  commitHlField(container);
+  if(end<=start) return;
+
+  pushUndo();
+  if(UI.highlightStyle==='erase'){
+    field.marks=eraseMarksOp(field.marks||[],start,end);
+    saveData(); render(); showToast('已清除标记');
+  }else{
+    const type=(UI.highlightStyle==='ul'||UI.highlightStyle==='wl')?UI.highlightStyle:'bg';
+    field.marks=applyMarkOp(field.marks||[],{start,end,type,color:UI.highlightColor});
+    saveData(); render(); showToast('已标记');
+  }
 }
 
 /* ================= 分数插入（弹窗内 textarea） ================= */
@@ -642,13 +744,20 @@ function convertMathText(t){
   return {text:restored,count};
 }
 function batchConvert(){
+  // 富文本字段（core/bullets/tips/examples/mistake.content）已经是 {text,marks}：
+  // 转换会改变字符位置，marks 的偏移就对不上了，所以只要这个字段真的被改动过就清空它的 marks；
+  // 公式/补充说明是纯字符串，不带标记系统，直接原地转换即可
   let total=0;
   DATA.categories.forEach(c=>c.groups.forEach(g=>g.points.forEach(p=>{
-    ['core','formula','raw'].forEach(k=>{if(p[k]){const r=convertMathText(p[k]);p[k]=r.text;total+=r.count;}});
-    ['bullets','tips'].forEach(k=>{if(p[k]) p[k]=p[k].map(v=>{const r=convertMathText(v);total+=r.count;return r.text;});});
-    if(p.examples){ const norm=normExamples(p.examples); norm.forEach(ex=>{const r=convertMathText(ex.text);ex.text=r.text;total+=r.count;}); p.examples=norm; }
+    ['formula','raw'].forEach(k=>{if(p[k]){const r=convertMathText(p[k]);p[k]=r.text;total+=r.count;}});
+    if(p.core){ const r=convertMathText(p.core.text); if(r.count>0){ p.core={text:r.text,marks:[]}; total+=r.count; } }
+    if(p.bullets) p.bullets=p.bullets.map(b=>{ const r=convertMathText(b.text); if(r.count>0){ total+=r.count; return {text:r.text,marks:[]}; } return b; });
+    if(p.tips) p.tips=p.tips.map(t=>{ const r=convertMathText(t.text); if(r.count>0){ total+=r.count; return {text:r.text,marks:[]}; } return t; });
+    if(p.examples){ p.examples=normExamples(p.examples).map(ex=>{ const r=convertMathText(ex.text); if(r.count>0){ total+=r.count; return {text:r.text,images:ex.images,marks:[]}; } return ex; }); }
   })));
-  DATA.mistakes.forEach(m=>{if(m.content){const r=convertMathText(m.content);m.content=r.text;total+=r.count;}});
+  DATA.mistakes.forEach(m=>{
+    if(m.content){ const r=convertMathText(m.content.text); if(r.count>0){ m.content={text:r.text,marks:[]}; total+=r.count; } }
+  });
   if(!total){showToast('没有发现可以转换的写法');return;}
   pushUndo(); saveData(); render(); showToast(`已转换 ${total} 处`);
 }
@@ -701,6 +810,8 @@ async function loadData(){
     }
   }
   if(!DATA.mistakes) DATA.mistakes=[];
+  // 富文本字段迁移：把字符串（含可能损坏/未闭合的旧版 {{type:color|...}} 标记语法）转成 {text,marks}，只需迁移一次
+  if(migrateAllRichText(DATA)){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} }
   if(DATA.categories.length&&!DATA.categories.find(c=>c.id===UI.activeCat)) UI.activeCat=DATA.categories[0].id;
   // 恢复字号
   let savedFont=1;
@@ -733,6 +844,7 @@ function handleImportFile(file){
     if(!confirm(`即将导入，会覆盖当前所有内容。确定吗？`)) return;
     pushUndo(); DATA=parsed;
     if(!DATA.mistakes) DATA.mistakes=[];
+    migrateAllRichText(DATA);
     if(!DATA.categories.find(c=>c.id===UI.activeCat)) UI.activeCat=DATA.categories[0]?DATA.categories[0].id:null;
     saveData(); render(); showToast('导入成功');
   };
@@ -869,28 +981,71 @@ function renderShapeFormula(formula){
     </div>`).join('')}</div>`;
 }
 
-/* 例题文本分段 */
-function formatExample(text){
+/* 例题文本分段：按原文里的字符位置切出题干/选项/答案/解析四段区间（不用 String.trim()，
+   trim 会改变字符位置，marks 的偏移就对不上了，所以用 trimRange 只挪动区间端点） */
+function trimRange(text,start,end){
+  while(start<end&&/\s/.test(text[start])) start++;
+  while(end>start&&/\s/.test(text[end-1])) end--;
+  return [start,end];
+}
+/* 取字段某个原文区间对应的子字段：文字直接切片，marks 按区间裁剪、偏移量重新从 0 算起 */
+function sliceField(field,start,end){
+  const text=(field.text||'').slice(start,end);
+  const marks=(field.marks||[])
+    .filter(m=>m.end>start&&m.start<end)
+    .map(m=>({start:Math.max(m.start,start)-start,end:Math.min(m.end,end)-start,type:m.type,color:m.color}));
+  return {text,marks};
+}
+function formatExample(field){
+  const text=field.text||'';
   if(!text) return '';
   const ansIdx=text.indexOf('【答案】');
-  let qPart=text,aPart='';
-  if(ansIdx>=0){ qPart=text.slice(0,ansIdx).trim(); aPart=text.slice(ansIdx+4).trim(); }
+  let qStart=0,qEnd=text.length,aStart=-1,aEnd=-1;
+  if(ansIdx>=0){ qEnd=ansIdx; aStart=ansIdx+4; aEnd=text.length; }
+  [qStart,qEnd]=trimRange(text,qStart,qEnd);
+  const qPart=text.slice(qStart,qEnd);
+
   const optRe=/(A\.[^B]*?B\.[^C]*?C\.[^D]*?D\..+)$/;
   const optMatch=qPart.match(optRe);
-  let stem=qPart,opts='';
-  if(optMatch){ opts=optMatch[1].trim(); stem=qPart.slice(0,qPart.indexOf(optMatch[1])).trim(); }
-  let answer=aPart,analysis='';
-  if(aPart){
-    const am=aPart.match(/^([A-D]{1,4})/);
-    if(am){ answer=am[1]; analysis=aPart.slice(am[1].length).replace(/^[。.．:：、\s]+/,'').trim(); }
-    else{ const pi=aPart.indexOf('。'); if(pi>0){ answer=aPart.slice(0,pi).trim(); analysis=aPart.slice(pi+1).trim(); } }
+  let stemStart=qStart,stemEnd=qEnd,optsStart=-1,optsEnd=-1;
+  if(optMatch){
+    const localOptStart=qPart.indexOf(optMatch[1]);
+    optsStart=qStart+localOptStart; optsEnd=optsStart+optMatch[1].length;
+    [optsStart,optsEnd]=trimRange(text,optsStart,optsEnd);
+    stemEnd=qStart+localOptStart;
+    [stemStart,stemEnd]=trimRange(text,stemStart,stemEnd);
   }
+
+  let ansStart=-1,ansEnd=-1,anaStart=-1,anaEnd=-1;
+  if(aStart>=0){
+    const [aS,aE]=trimRange(text,aStart,aEnd);
+    const aPart=text.slice(aS,aE);
+    const am=aPart.match(/^([A-D]{1,4})/);
+    if(am){
+      ansStart=aS; ansEnd=aS+am[1].length;
+      let restStart=ansEnd;
+      while(restStart<aE&&/[。.．:：、\s]/.test(text[restStart])) restStart++;
+      [anaStart,anaEnd]=trimRange(text,restStart,aE);
+    }else{
+      const pi=aPart.indexOf('。');
+      if(pi>0){
+        [ansStart,ansEnd]=trimRange(text,aS,aS+pi);
+        [anaStart,anaEnd]=trimRange(text,aS+pi+1,aE);
+      }else{ ansStart=aS; ansEnd=aE; }
+    }
+  }
+
+  const stem=stemEnd>stemStart?sliceField(field,stemStart,stemEnd):null;
+  const opts=optsEnd>optsStart?sliceField(field,optsStart,optsEnd):null;
+  const answer=ansEnd>ansStart?sliceField(field,ansStart,ansEnd):null;
+  const analysis=anaEnd>anaStart?sliceField(field,anaStart,anaEnd):null;
+
   let html='';
-  if(stem) html+=`<div class="ex-stem">${fracRender(stem)}</div>`;
-  if(opts) html+=`<div class="ex-opts">${fracRender(opts)}</div>`;
-  if(answer) html+=`<div class="ex-answer"><span class="ex-ans-label">【答案】</span>${fracRender(answer)}</div>`;
-  if(analysis) html+=`<div class="ex-analysis">${fracRender(analysis)}</div>`;
-  return html||fracRender(text);
+  if(stem) html+=`<div class="ex-stem" data-exoff="${stemStart}">${renderMarked(stem)}</div>`;
+  if(opts) html+=`<div class="ex-opts" data-exoff="${optsStart}">${renderMarked(opts)}</div>`;
+  if(answer) html+=`<div class="ex-answer" data-exoff="${ansStart}"><span class="ex-ans-label">【答案】</span><span class="ex-ans-text">${renderMarked(answer)}</span></div>`;
+  if(analysis) html+=`<div class="ex-analysis" data-exoff="${anaStart}">${renderMarked(analysis)}</div>`;
+  return html||renderMarked(field);
 }
 
 /* ================= Mermaid 懒加载 ================= */
@@ -952,25 +1107,25 @@ function openPointModal(catId,grpId,editId){
     <label>所属分组</label><select id="m-grp">${groupOptionsFor(targetCat)}</select>
     <label>知识点标题</label><input type="text" id="m-title" value="${editing?esc(editing.title):''}" placeholder="例如：假设分配法">
     <label>图标短标签 <span class="hint">（1-2字）</span></label><input type="text" id="m-tag" value="${editing&&editing.tag?esc(editing.tag):''}" placeholder="例如：假设" maxlength="2">
-    <label>核心一句话</label><textarea id="m-core" style="min-height:44px">${editing&&editing.core?esc(editing.core):''}</textarea>
+    <label>核心一句话</label><textarea id="m-core" style="min-height:44px">${editing&&editing.core?esc(editing.core.text):''}</textarea>
     <div class="sec-label-row"><input type="text" class="lbl-input" id="m-label-formula" value="${editing&&editing.labelFormula!=null?esc(editing.labelFormula):'公式 / 口诀'}" placeholder="小节标题，删空则不显示"></div>
     <div class="label-row"><span></span><button type="button" class="frac-btn" data-target="m-formula">➕分数</button></div>
     <textarea id="m-formula" class="mono" style="min-height:50px" placeholder="公式内容">${editing&&editing.formula?esc(editing.formula):''}</textarea>
     <div class="sec-label-row"><input type="text" class="lbl-input" id="m-label-bullets" value="${editing&&editing.labelBullets!=null?esc(editing.labelBullets):'要点'}" placeholder="小节标题"></div>
-    <textarea id="m-bullets" style="min-height:70px" placeholder="每行一条">${editing&&editing.bullets?esc(editing.bullets.join('\n')):''}</textarea>
+    <textarea id="m-bullets" style="min-height:70px" placeholder="每行一条">${editing&&editing.bullets?esc(editing.bullets.map(b=>b.text).join('\n')):''}</textarea>
     <div class="sec-label-row"><input type="text" class="lbl-input" id="m-label-examples" value="${editing&&editing.labelExamples!=null?esc(editing.labelExamples):'例题'}" placeholder="小节标题"></div>
     <div id="m-ex-list"></div>
     <div class="ex-add-row"><button type="button" class="btn btn-sm" id="m-ex-add">＋ 添加一条例题</button></div>
     <input type="file" id="m-ex-img-input" accept="image/*" multiple style="display:none">
     <div class="sec-label-row"><input type="text" class="lbl-input" id="m-label-tips" value="${editing&&editing.labelTips!=null?esc(editing.labelTips):'Tips'}" placeholder="小节标题"></div>
-    <textarea id="m-tips" style="min-height:50px" placeholder="每行一条">${editing&&editing.tips?esc(editing.tips.join('\n')):''}</textarea>
+    <textarea id="m-tips" style="min-height:50px" placeholder="每行一条">${editing&&editing.tips?esc(editing.tips.map(t=>t.text).join('\n')):''}</textarea>
     <label>补充说明 <span class="hint">（可选）</span></label>
     <textarea id="m-raw" style="min-height:50px">${editing&&editing.raw?esc(editing.raw):''}</textarea>
     <div class="modal-actions"><button class="btn" data-action="close-modal">取消</button><button class="btn primary" id="m-save">保存</button></div>
   `);
 
   document.getElementById('m-cat').onchange=e=>{ document.getElementById('m-grp').innerHTML=groupOptionsFor(e.target.value); };
-  pendingExamples=editing?normExamples(editing.examples):[];
+  pendingExamples=editing?normExamples(editing.examples).map(ex=>({...ex,_origText:ex.text})):[];
   let exImgTarget=-1;
   const exImgInput=document.getElementById('m-ex-img-input'),exLabelInput=document.getElementById('m-label-examples');
 
@@ -1005,7 +1160,7 @@ function openPointModal(catId,grpId,editId){
   }
   renderExList();
   exLabelInput.oninput=()=>{ document.querySelectorAll('#m-ex-list .ex-edit-head span').forEach((sp,idx)=>{sp.textContent=(exLabelInput.value.trim()||'例题')+(idx+1);}); };
-  document.getElementById('m-ex-add').onclick=()=>{ pendingExamples.push({text:'',images:[]}); renderExList(); const tas=document.querySelectorAll('#m-ex-list [data-extext]'); if(tas.length) tas[tas.length-1].focus(); };
+  document.getElementById('m-ex-add').onclick=()=>{ pendingExamples.push({text:'',images:[],marks:[],_origText:null}); renderExList(); const tas=document.querySelectorAll('#m-ex-list [data-extext]'); if(tas.length) tas[tas.length-1].focus(); };
   exImgInput.onchange=async e=>{
     const files=Array.from(e.target.files||[]).filter(f=>f&&f.type&&f.type.startsWith('image/'));
     e.target.value=''; if(!files.length||exImgTarget<0||!pendingExamples[exImgTarget]) return;
@@ -1014,15 +1169,22 @@ function openPointModal(catId,grpId,editId){
   };
 
   document.getElementById('m-save').onclick=()=>{
+    const sb=document.getElementById('m-save'); if(sb.disabled) return; sb.disabled=true; const sbt=sb.textContent; sb.textContent='保存中…';
+    try{
     const title=document.getElementById('m-title').value.trim();
     const cid=document.getElementById('m-cat').value,gid=document.getElementById('m-grp').value;
     if(!title){alert('请输入知识点标题');return;} if(!gid){alert('该板块暂无分组');return;}
     const tag=document.getElementById('m-tag').value.trim()||title.slice(0,2);
-    const core=document.getElementById('m-core').value.trim();
+    // 富文本字段：文字没变就保留原有 marks，改了就清空（字符位置对不上了，标记没法沿用）
+    const coreText=document.getElementById('m-core').value.trim();
+    const oldCoreText=editing&&editing.core?editing.core.text:null;
+    const core={text:coreText,marks:(editing&&oldCoreText===coreText)?(editing.core.marks||[]):[]};
     const formula=document.getElementById('m-formula').value.trim();
-    const bullets=linesToArr(document.getElementById('m-bullets').value);
-    const examples=pendingExamples.map(ex=>({text:ex.text.trim(),images:ex.images})).filter(ex=>ex.text||ex.images.length);
-    const tips=linesToArr(document.getElementById('m-tips').value);
+    const oldBullets=editing&&editing.bullets?editing.bullets:[];
+    const bullets=linesToArr(document.getElementById('m-bullets').value).map((t,i)=>({text:t,marks:(oldBullets[i]&&oldBullets[i].text===t)?(oldBullets[i].marks||[]):[]}));
+    const examples=pendingExamples.map(ex=>({text:ex.text.trim(),images:ex.images,marks:(ex._origText===ex.text.trim())?(ex.marks||[]):[]})).filter(ex=>ex.text||ex.images.length);
+    const oldTips=editing&&editing.tips?editing.tips:[];
+    const tips=linesToArr(document.getElementById('m-tips').value).map((t,i)=>({text:t,marks:(oldTips[i]&&oldTips[i].text===t)?(oldTips[i].marks||[]):[]}));
     const raw=document.getElementById('m-raw').value.trim();
     const labelFormula=document.getElementById('m-label-formula').value.trim();
     const labelBullets=document.getElementById('m-label-bullets').value.trim();
@@ -1040,6 +1202,7 @@ function openPointModal(catId,grpId,editId){
       }else{ Object.assign(editing,fields); }
     }else{ grp.points.push({id:uid('p'),...fields}); }
     UI.activeCat=cid; saveData(); closeModal(); render();
+    }finally{ sb.disabled=false; sb.textContent=sbt; }
   };
 }
 
@@ -1076,7 +1239,7 @@ function openMistakeModal(editId,presetPointId){
     <h3>${editing?'编辑错题':'添加错题'}</h3>
     <label>错题标题 / 题目摘要</label><input type="text" id="m-title" value="${editing?esc(editing.title):''}" placeholder="例如：2022年国考真题第XX题">
     <label class="label-row"><span>错题内容 / 解析 / 易错点</span><button type="button" class="frac-btn" data-target="m-content">➕分数</button></label>
-    <textarea id="m-content" placeholder="题干、我的错误、正确思路…">${editing?esc(editing.content):''}</textarea>
+    <textarea id="m-content" placeholder="题干、我的错误、正确思路…">${editing&&editing.content?esc(editing.content.text):''}</textarea>
     <label>题目图片</label>
     <div class="img-drop" id="m-img-drop">📷 点击选择图片，或直接拖进来</div>
     <input type="file" id="m-img-input" accept="image/*" multiple style="display:none">
@@ -1108,7 +1271,9 @@ function openMistakeModal(editId,presetPointId){
 
   document.getElementById('m-save').onclick=()=>{
     const title=document.getElementById('m-title').value.trim();
-    const content=document.getElementById('m-content').value.trim();
+    const contentText=document.getElementById('m-content').value.trim();
+    const oldContentText=editing&&editing.content?editing.content.text:null;
+    const content={text:contentText,marks:(editing&&oldContentText===contentText)?(editing.content.marks||[]):[]};
     const tags=[...document.querySelectorAll('#m-checks input:checked')].map(i=>i.value);
     if(!title){alert('请输入错题标题');return;} if(tags.length===0){alert('请至少选择一个关联知识点');return;}
     pushUndo();
@@ -1135,7 +1300,7 @@ function populateSearchResults(q){
   const kw=q.trim().toLowerCase();
   const results=[];
   DATA.categories.forEach(c=>{ c.groups.forEach(g=>{ g.points.forEach(p=>{
-    if((p.tag||'').toLowerCase().includes(kw)||(p.title||'').toLowerCase().includes(kw)||(p.core||'').toLowerCase().includes(kw))
+    if((p.tag||'').toLowerCase().includes(kw)||(p.title||'').toLowerCase().includes(kw)||((p.core&&p.core.text)||'').toLowerCase().includes(kw))
       results.push({cat:c,point:p});
   });});});
   if(!results.length){ wrap.innerHTML='<div class="rsp-empty">未找到匹配的知识点</div>'; return; }
@@ -1279,17 +1444,17 @@ function renderMain(){
       const open=UI.openMistakes.has(p.id);
 
       let contentHtml='';
-      if(p.core&&p.core.trim()) contentHtml+=`<div class="sec"><p class="pt-core" data-hlfield="point:${p.id}:core">${fracRender(p.core)}</p></div>`;
+      if(p.core&&p.core.text&&p.core.text.trim()) contentHtml+=`<div class="sec"><p class="pt-core" data-hlfield="point:${p.id}:core">${renderMarked(p.core)}</p></div>`;
       if(p.formula&&p.formula.trim()) contentHtml+=`<div class="sec"><div class="sec-label">${p.labelFormula||'公式 / 口诀'}</div><div class="pt-formula" data-hlfield="point:${p.id}:formula">${renderShapeFormula(p.formula)}</div></div>`;
-      if(p.bullets&&p.bullets.length) contentHtml+=`<div class="sec"><div class="sec-label">${p.labelBullets||'要点'}</div><ul class="pt-bullets">${p.bullets.map((b,i)=>`<li data-hlfield="point:${p.id}:bullet:${i}">${fracRender(b)}</li>`).join('')}</ul></div>`;
+      if(p.bullets&&p.bullets.length) contentHtml+=`<div class="sec"><div class="sec-label">${p.labelBullets||'要点'}</div><ul class="pt-bullets">${p.bullets.map((b,i)=>`<li data-hlfield="point:${p.id}:bullet:${i}">${renderMarked(b)}</li>`).join('')}</ul></div>`;
       if(p.examples&&p.examples.length){
         const exs=normExamples(p.examples).map((ex,i)=>{
           const imgs=(ex.images&&ex.images.length)?`<div class="ex-imgs">${ex.images.map(src=>`<img src="${src}" data-action="zoom" data-src="${src}">`).join('')}</div>`:'';
-          return `<div class="ex-card"><span class="ex-tag">例题${i+1}</span><div class="ex-text" data-hlfield="point:${p.id}:example:${i}">${formatExample(ex.text)}</div>${imgs}</div>`;
+          return `<div class="ex-card"><span class="ex-tag">例题${i+1}</span><div class="ex-text" data-hlfield="point:${p.id}:example:${i}">${formatExample(ex)}</div>${imgs}</div>`;
         }).join('');
         contentHtml+=`<div class="sec"><div class="sec-label">${p.labelExamples||'例题'}</div><div class="pt-examples">${exs}</div></div>`;
       }
-      if(p.tips&&p.tips.length) contentHtml+=`<div class="sec"><div class="sec-label">${p.labelTips||'Tips'}</div><div class="pt-tips">${p.tips.map((t,i)=>`<div class="tip-line" data-hlfield="point:${p.id}:tip:${i}">${fracRender(t)}</div>`).join('')}</div></div>`;
+      if(p.tips&&p.tips.length) contentHtml+=`<div class="sec"><div class="sec-label">${p.labelTips||'Tips'}</div><div class="pt-tips">${p.tips.map((t,i)=>`<div class="tip-line" data-hlfield="point:${p.id}:tip:${i}">${renderMarked(t)}</div>`).join('')}</div></div>`;
       if(hasDiagram){
         if(p.diagram.type==='svg') contentHtml+=`<div class="sec"><div class="sec-label">图解</div><div class="pt-diagram" style="color:var(--ink)">${p.diagram.code}</div></div>`;
         else if(p.diagram.type==='mermaid') contentHtml+=`<div class="sec"><div class="sec-label">图解</div><div class="pt-diagram has-mermaid"><pre class="mermaid" data-mcode="${p.id}"></pre></div></div>`;
@@ -1352,7 +1517,7 @@ function renderMistake(m){
   const imgs=m.images&&m.images.length?m.images:[];
   return `<div class="mistake" data-mistake="${m.id}">
     <div class="mistake-row"><div class="mistake-title">${esc(m.title)}</div><div class="mistake-actions"><button class="iconbtn" title="编辑错题" data-action="edit-mistake" data-id="${m.id}">✎</button><button class="iconbtn" title="删除错题" data-action="del-mistake" data-id="${m.id}">🗑</button></div></div>
-    ${m.content?`<div class="mistake-body" data-hlfield="mistake:${m.id}:content">${fracRender(m.content)}</div>`:''}
+    ${m.content&&m.content.text?`<div class="mistake-body" data-hlfield="mistake:${m.id}:content">${renderMarked(m.content)}</div>`:''}
     ${imgs.length?`<div class="mistake-imgs">${imgs.map(src=>`<img src="${src}" data-action="zoom" data-src="${src}" data-mistake-id="${m.id}">`).join('')}</div>`:''}
   </div>`;
 }

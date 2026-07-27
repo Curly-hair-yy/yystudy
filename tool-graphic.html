@@ -2546,40 +2546,50 @@ document.getElementById('fImagePreviewWrap').addEventListener('click', (e)=>{
   renderImagePreviews();
 });
 document.getElementById('saveAdd').onclick=async()=>{
-  const selectedKeys = getSelectedTopicKeys();
-  const title = document.getElementById('fTitle').value.trim();
-  const content = document.getElementById('fContent').value.trim();
-  const wrongBook = document.getElementById('fWrongBook').checked;
-  if(!selectedKeys.length){ showToast('请至少选择一个关联知识点'); return; }
-  if(state.editingNote){
-    const { noteId } = state.editingNote;
-    const note = findNoteById(noteId);
-    if(!note){ showToast('没有找到这条补充'); return; }
-    const updated = {
-      ...note,
-      title,
-      content,
-      wrongBook,
-      updatedAt: Date.now(),
-      topicKeys: selectedKeys,
-      images: pendingImages.slice(),
-      image: null
-    };
-    removeNoteEverywhere(noteId);
-    selectedKeys.forEach(key=>{
-      state.notes[key] = state.notes[key] || [];
-      state.notes[key].push({...updated});
-    });
-  } else {
-    const note = { id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), title, content, ts: Date.now(), images: pendingImages.slice(), wrongBook, topicKeys: selectedKeys };
-    selectedKeys.forEach(key=>{
-      state.notes[key] = state.notes[key] || [];
-      state.notes[key].push({...note});
-    });
+  const btn = document.getElementById('saveAdd');
+  if(btn.disabled) return;
+  btn.disabled = true; const origText = btn.textContent; btn.textContent = '保存中…';
+  try{
+    const selectedKeys = getSelectedTopicKeys();
+    const title = document.getElementById('fTitle').value.trim();
+    const content = document.getElementById('fContent').value.trim();
+    const wrongBook = document.getElementById('fWrongBook').checked;
+    if(!selectedKeys.length){ showToast('请至少选择一个关联知识点'); return; }
+    if(state.editingNote){
+      const { noteId } = state.editingNote;
+      const note = findNoteById(noteId);
+      if(!note){ showToast('没有找到这条补充'); return; }
+      const updated = {
+        ...note,
+        title,
+        content,
+        wrongBook,
+        updatedAt: Date.now(),
+        topicKeys: selectedKeys,
+        images: pendingImages.slice(),
+        image: null
+      };
+      removeNoteEverywhere(noteId);
+      selectedKeys.forEach(key=>{
+        state.notes[key] = state.notes[key] || [];
+        state.notes[key].push({...updated});
+      });
+    } else {
+      const note = { id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), title, content, ts: Date.now(), images: pendingImages.slice(), wrongBook, topicKeys: selectedKeys };
+      selectedKeys.forEach(key=>{
+        state.notes[key] = state.notes[key] || [];
+        state.notes[key].push({...note});
+      });
+    }
+    await saveNotes();
+    const edited = !!state.editingNote;
+    closeModal(); showToast(edited ? '已保存修改' : (wrongBook ? '已添加并加入错题本' : '已添加')); renderAll();
+  }catch(err){
+    console.error('[saveAdd]', err);
+    showToast('保存失败：' + (err.message || '未知错误'));
+  }finally{
+    btn.disabled = false; btn.textContent = origText;
   }
-  await saveNotes();
-  const edited = !!state.editingNote;
-  closeModal(); showToast(edited ? '已保存修改' : (wrongBook ? '已添加并加入错题本' : '已添加')); renderAll();
 };
 document.getElementById('exportBtn').onclick=exportData;
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
