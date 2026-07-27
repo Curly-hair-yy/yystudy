@@ -623,9 +623,10 @@ html.skin-pink .mini-index{
 html.skin-pink .mini-index .mi-tag{ font-size:11px; color:var(--ink-faint); letter-spacing:1px; margin-bottom:4px; }
 html.skin-pink .mini-index h4{ font-size:15px; font-weight:800; margin:0 0 16px; }
 html.skin-pink .mi-group{ margin-bottom:16px; }
-html.skin-pink .mi-group-name{ font-size:11.5px; font-weight:800; color:var(--accent); margin-bottom:6px; padding-left:2px; }
-html.skin-pink .mi-item{ display:flex; align-items:center; gap:8px; padding:6px 7px; border-radius:7px; font-size:12.5px; cursor:pointer; color:var(--ink-soft); }
+html.skin-pink .mi-group-name{ font-size:11.5px; font-weight:800; color:var(--ink); margin-bottom:6px; padding-left:2px; }
+html.skin-pink .mi-item{ display:flex; align-items:center; gap:8px; padding:6px 7px; border-radius:7px; font-size:12.5px; cursor:pointer; color:var(--ink-soft); transition:color .18s ease,font-weight .18s ease; }
 html.skin-pink .mi-item:hover{ background:transparent; color:var(--accent); font-weight:700; }
+html.skin-pink .mi-item.active{ color:var(--accent); font-weight:700; }
 html.skin-pink .mi-item .ch{
   width:auto; height:auto; border-radius:0;
   background:none;
@@ -1523,6 +1524,7 @@ function renderBrowse(){
   }
   scrollToPendingTarget(el);
   renderBrowseMiniIndex(m);
+  setupMiniScrollSpy();
 }
 
 function renderBrowseMiniIndex(m){
@@ -1549,6 +1551,36 @@ function renderBrowseMiniIndex(m){
       }
     };
   });
+}
+
+/* 小索引滚动同步高亮 — 阅读锚点：35% 视口基准线 + 节流 */
+function setupMiniScrollSpy(){
+  const mini=document.getElementById('browseMiniIndex');
+  if(!mini||!mini.innerHTML.trim()) return;
+  const cards=document.querySelectorAll('#browseView .topic[data-topic-id]');
+  if(!cards.length) return;
+  if(window._miScrollCleanup){ window._miScrollCleanup(); window._miScrollCleanup=null; window._miScrollTicking=false; }
+  function updateActive(){
+    const vh=window.innerHeight, anchorY=vh*0.35;
+    let bestCard=null, bestDist=Infinity;
+    cards.forEach(card=>{
+      const top=card.getBoundingClientRect().top;
+      if(top<=anchorY){ const dist=anchorY-top; if(dist<bestDist){ bestDist=dist; bestCard=card; } }
+    });
+    if(!bestCard&&cards.length){
+      let first=cards[0], firstDist=Infinity;
+      cards.forEach(card=>{ const d=card.getBoundingClientRect().top; if(d<firstDist){ firstDist=d; first=card; } });
+      bestCard=first;
+    }
+    const tid=bestCard?bestCard.dataset.topicId:null;
+    mini.querySelectorAll('.mi-item').forEach(el=>{ el.classList.toggle('active',tid&&el.dataset.topicId===tid); });
+  }
+  let ticking=false;
+  function onScroll(){ if(!ticking){ requestAnimationFrame(()=>{ updateActive(); ticking=false; }); ticking=true; } }
+  window.addEventListener('scroll',onScroll,{passive:true});
+  window._miScrollCleanup=()=>{ window.removeEventListener('scroll',onScroll); window._miScrollTicking=false; };
+  window._miScrollTicking=true;
+  updateActive();
 }
 
 function renderSearch(q){

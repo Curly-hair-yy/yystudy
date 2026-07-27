@@ -489,9 +489,10 @@
   html[data-theme="pink"] .mi-tag{font-size:11px;color:var(--ink-faint);letter-spacing:1px;margin-bottom:4px;font-family:var(--mono);}
   html[data-theme="pink"] .pink-mini-index h4{font-size:15px;font-weight:800;margin:0 0 16px;font-family:var(--serif);color:var(--ink);}
   html[data-theme="pink"] .mi-group{margin-bottom:16px;}
-  html[data-theme="pink"] .mi-group-name{font-size:11.5px;font-weight:800;color:var(--accent);margin-bottom:6px;padding-left:2px;font-family:var(--serif);}
-  html[data-theme="pink"] .mi-item{padding:6px 7px;border-radius:7px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);font-family:var(--serif);}
+  html[data-theme="pink"] .mi-group-name{font-size:11.5px;font-weight:800;color:var(--ink);margin-bottom:6px;padding-left:2px;font-family:var(--serif);}
+  html[data-theme="pink"] .mi-item{padding:6px 7px;border-radius:7px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);font-family:var(--serif);transition:color .18s ease,font-weight .18s ease;}
   html[data-theme="pink"] .mi-item:hover{background:transparent;color:var(--accent);font-weight:700;}
+  html[data-theme="pink"] .mi-item.active{color:var(--accent);font-weight:700;}
 
   html[data-theme="pink"] #app{flex:1;min-width:0;margin:0;padding:36px 32px 60px;}
 
@@ -2077,6 +2078,7 @@ function render(){
     : renderQuicknavPage();
   bindEvents();
   syncPinkRail();
+  setupMiniScrollSpy();
 }
 
 /* ================= 文艺粉：左侧竖排导航 + 悬停模块菜单 + 浏览页小索引 ================= */
@@ -2117,6 +2119,36 @@ function syncPinkRail(){
       mini.innerHTML = '';
     }
   }
+}
+
+/* 小索引滚动同步高亮 — 阅读锚点：35% 视口基准线 + 节流 */
+function setupMiniScrollSpy(){
+  const mini=document.getElementById('pinkMiniIndex');
+  if(!mini||!mini.innerHTML.trim()) return;
+  const cards=document.querySelectorAll('#app .card[data-pt]');
+  if(!cards.length) return;
+  if(window._miScrollCleanup){ window._miScrollCleanup(); window._miScrollCleanup=null; window._miScrollTicking=false; }
+  function updateActive(){
+    const vh=window.innerHeight, anchorY=vh*0.35;
+    let bestCard=null, bestDist=Infinity;
+    cards.forEach(card=>{
+      const top=card.getBoundingClientRect().top;
+      if(top<=anchorY){ const dist=anchorY-top; if(dist<bestDist){ bestDist=dist; bestCard=card; } }
+    });
+    if(!bestCard&&cards.length){
+      let first=cards[0], firstDist=Infinity;
+      cards.forEach(card=>{ const d=card.getBoundingClientRect().top; if(d<firstDist){ firstDist=d; first=card; } });
+      bestCard=first;
+    }
+    const ptId=bestCard?bestCard.dataset.pt:null;
+    mini.querySelectorAll('.mi-item').forEach(el=>{ el.classList.toggle('active',ptId&&el.dataset.mpt===ptId); });
+  }
+  let ticking=false;
+  function onScroll(){ if(!ticking){ requestAnimationFrame(()=>{ updateActive(); ticking=false; }); ticking=true; } }
+  window.addEventListener('scroll',onScroll,{passive:true});
+  window._miScrollCleanup=()=>{ window.removeEventListener('scroll',onScroll); window._miScrollTicking=false; };
+  window._miScrollTicking=true;
+  updateActive();
 }
 
 function renderQuicknavPage(){

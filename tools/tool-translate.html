@@ -241,7 +241,7 @@
   .toc-toggle:hover{background:var(--indigo); color:#fff;}
   .toc-toggle-arrow{display:inline-block; font-size:15px; font-weight:700; line-height:1; transition:transform .25s ease;}
   .shell.toc-collapsed .toc-toggle-arrow{transform:rotate(180deg);}
-  nav#toc a{
+  nav#toc a{transition:color .18s ease,font-weight .18s ease;
     display:flex; align-items:flex-start; gap:8px;
     font-size:0.8125rem; color:var(--ink-soft); text-decoration:none;
     padding:8px 10px;
@@ -251,6 +251,8 @@
   }
   nav#toc a .num{margin-top:1px;}
   nav#toc a:hover{color:var(--indigo); background:var(--indigo-tint);}
+  nav#toc a.active{color:var(--seal); font-weight:700;}
+  nav#toc a.active .num{background:var(--seal); color:#fff;}
   nav#toc a .num{
     font-family:'JetBrains Mono',monospace; font-weight:700; font-size:0.6875rem; color:var(--indigo-soft);
     width:20px; height:20px; border-radius:6px; flex-shrink:0;
@@ -271,7 +273,7 @@
   nav#toc .toc-label{font-size:0.6875rem; letter-spacing:.1em; color:var(--ink-faint); text-transform:uppercase; padding:0 6px 8px;}
   .shell.toc-collapsed nav#toc{padding:14px 6px;}
   .shell.toc-collapsed .toc-label, .shell.toc-collapsed nav#toc a .label{display:none;}
-  .shell.toc-collapsed nav#toc a{justify-content:center; padding:8px 0;}
+  .shell.toc-collapsed nav#toc a{transition:color .18s ease,font-weight .18s ease;justify-content:center; padding:8px 0;}
   .shell.toc-collapsed nav#toc .toc-top{justify-content:center;}
 
   /* ---- 目录下方的标注工具行 ---- */
@@ -428,7 +430,7 @@
     nav#toc{position:static; padding:12px;}
     nav#toc .toc-top{padding:0 2px 8px;}
     #tocList{display:flex; flex-direction:row; flex-wrap:wrap; gap:6px; max-height:none; overflow:visible;}
-    nav#toc a{
+    nav#toc a{transition:color .18s ease,font-weight .18s ease;
       flex-direction:row; white-space:nowrap; border-radius:20px;
       padding:6px 12px 6px 6px; background:var(--indigo-tint);
       font-size:0.78125rem;
@@ -437,7 +439,7 @@
     nav#toc a:hover .num{background:rgba(255,255,255,0.25); color:#fff;}
     .shell.toc-collapsed nav#toc a .label{display:inline;}
     .shell.toc-collapsed #tocList{flex-direction:row;}
-    .shell.toc-collapsed nav#toc a{justify-content:flex-start; padding:6px 12px 6px 6px;}
+    .shell.toc-collapsed nav#toc a{transition:color .18s ease,font-weight .18s ease;justify-content:flex-start; padding:6px 12px 6px 6px;}
     .toc-toggle{display:none;}
     footer{padding-left:24px;}
     .compare-grid{grid-template-columns:1fr;}
@@ -539,7 +541,7 @@
     letter-spacing:0.04em; transform:scaleX(0.92); transform-origin:left;
   }
   body.skin-y2k .eyebrow{background:#F1F1EF; color:#5A5A57;}
-  body.skin-y2k nav#toc a{color:#5A5A57;}
+  body.skin-y2k nav#toc a{transition:color .18s ease,font-weight .18s ease;color:#5A5A57;}
   body.skin-y2k .toc-toggle{background:#F1F1EF; color:#5A5A57;}
   body.skin-y2k .toc-toggle:hover{background:#111; color:#fff;}
   body.skin-y2k .card, body.skin-y2k .col, body.skin-y2k .card-head{
@@ -1755,6 +1757,35 @@ function renderAll(data){
   data.forEach(renderSection);
   renumber();
   setEditMode(isEditing);
+  setupTocScrollSpy();
+}
+
+/* TOC 滚动同步高亮 — 阅读锚点：35% 视口基准线 + 节流 */
+function setupTocScrollSpy(){
+  const cards=container.querySelectorAll('.card[id]');
+  if(!cards.length) return;
+  if(window._tocScrollCleanup){ window._tocScrollCleanup(); window._tocScrollCleanup=null; window._tocScrollTicking=false; }
+  function updateActive(){
+    const vh=window.innerHeight, anchorY=vh*0.35;
+    let bestCard=null, bestDist=Infinity;
+    cards.forEach(card=>{
+      const top=card.getBoundingClientRect().top;
+      if(top<=anchorY){ const dist=anchorY-top; if(dist<bestDist){ bestDist=dist; bestCard=card; } }
+    });
+    if(!bestCard&&cards.length){
+      let first=cards[0], firstDist=Infinity;
+      cards.forEach(card=>{ const d=card.getBoundingClientRect().top; if(d<firstDist){ firstDist=d; first=card; } });
+      bestCard=first;
+    }
+    const cardId=bestCard?bestCard.id:null;
+    tocEl.querySelectorAll('a').forEach(a=>{ a.classList.toggle('active',cardId&&a.dataset.for===cardId); });
+  }
+  let ticking=false;
+  function onScroll(){ if(!ticking){ requestAnimationFrame(()=>{ updateActive(); ticking=false; }); ticking=true; } }
+  window.addEventListener('scroll',onScroll,{passive:true});
+  window._tocScrollCleanup=()=>{ window.removeEventListener('scroll',onScroll); window._tocScrollTicking=false; };
+  window._tocScrollTicking=true;
+  updateActive();
 }
 
 function serializeRows(scope){
