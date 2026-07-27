@@ -12,16 +12,21 @@ yystudy 是一个学习工具集（考试备考辅助），部署在 GitHub Page
 index.html          ← 工具集 Hub 页（可折叠导航栏 + iframe 容器）
 cloud-localstorage-sync.js  ← localStorage 自动同步到 Supabase（透明拦截层）
 storage-polyfill.js ← 为脱离 Claude Artifact 环境运行的工具提供 window.storage API
+tool-notebook.html  ← 资料分析·错题本（根目录）
+tool-graphic.html   ← 图推错题整理（根目录）
+tool-translate.html ← 翻译推理知识点（根目录）
+tool-quant.html     ← 数量关系·知识点（根目录）
 tools/
-  tool-notebook.html   ← 资料分析·错题本
-  tool-memory.html     ← 小分互换记忆卡
-  tool-graphic.html    ← 图推错题整理
-  tool-translate.html  ← 翻译推理知识点
-  tool-blocks.html     ← 电子积木沙盒
+  tool-memory.html  ← 资料分析·小分互换记忆卡
+  tool-blocks.html  ← 图推·电子积木沙盒
 fonts/
   ELEYANG-Soft-Bold.ttf  ← 工具内用作徽章/印章字体
   新海山峦.ttf
+data/
+  quant-data.json   ← 数量关系知识库（13 板块 / 33 分组 / 62 知识点）
 ```
+
+**⚠️ 四个主力工具（notebook / graphic / translate / quant）在项目根目录，不要移到 tools/ 子文件夹。** 之前有过一次误移又改回来的教训（commit `f81acbe`）。
 
 ### Hub 页 (`index.html`)
 
@@ -29,6 +34,7 @@ fonts/
 - `<nav>` 里的按钮通过 JS 动态生成，点击在 `<main>` 中懒加载对应 `<iframe>`
 - 用 `localStorage('hub-last-tab')` 记住上次打开的工具
 - CSS 变量 `--serif` / `--sans` 定义字体栈，`--paper` / `--surface` / `--ink` / `--accent` 等定义颜色
+- 工具入口配置数组在 `index.html` 的 `<script>` 中，每个入口 `{ id, label, src }`，`src` 指向根目录的 HTML 文件路径
 
 ### 数据同步层
 
@@ -37,10 +43,18 @@ fonts/
 
 两类脚本在同一页面里只应引入一个，不能混用。
 
+**当前同步状态**：
+- `tool-notebook.html` — 使用 `storage-polyfill.js`（Supabase 云端同步）
+- `tool-graphic.html` — 使用 `cloud-localstorage-sync.js`（Supabase 云端同步）
+- `tool-translate.html` — 使用 `cloud-localstorage-sync.js`（Supabase 云端同步）
+- `tool-quant.html` — **仅 localStorage，尚未接入 Supabase**（`STORE_KEY = 'quant_data'`，数据从 `data/quant-data.json` 首次加载后存入 localStorage）
+
 ### 工具页设计约定
 
 - 每个工具页是自包含的 HTML 文件，`<style>` 和 `<script>` 都写在同一个文件里
 - 图推错题整理（tool-graphic.html）有两套皮肤：默认（蓝灰调）和粉调 `.skin-pink`，后者通过覆盖 CSS 变量切换，会将 `--font-sans` 重定义为 `"Noto Serif SC", serif` 让正文变宋体
+- 资料分析错题本（tool-notebook.html）有「文艺粉」皮肤 `html[data-theme="pink"]`
+- 翻译推理（tool-translate.html）和数量关系（tool-quant.html）直接使用文艺粉风格作为默认
 - 表单项、按钮等交互元素通过统一的 CSS 变量控制样式，不内联写死颜色
 - 部分工具用 Google Fonts 加载 `Noto Serif SC`
 
@@ -84,6 +98,46 @@ Supabase 项目，REST API endpoint：`https://tfvgntgamixgzjjvumcy.supabase.co/
 ### 大文件
 
 不要读取 `data` 相关的数据文件（存在 12MB 的笔记数据）——搜索、查找时跳过这些文件。
+
+## 小索引滚动高亮功能
+
+四个工具都实现了左侧 sticky 迷你索引的滚动同步高亮，逻辑统一：
+
+### 三层颜色规则
+
+| 层级 | 元素 | 默认色 | 滚动高亮 | 参与变色 |
+|------|------|--------|----------|----------|
+| 板块标题 | `<h4>` | `var(--ink)` | 不变 | ❌ |
+| 分组标题 | `.mi-group-name` | `var(--ink)` | 不变 | ❌ |
+| 知识点标题 | `.mi-item` | `var(--ink-soft)` | → `var(--accent)` | ✅ |
+
+知识点标题有 `transition: color .18s ease` 让高亮切换平滑。
+
+### 判定逻辑：「阅读锚点」
+
+**不是简单的进入视口判定**。用 scroll 事件 + `requestAnimationFrame` 节流，在视口 35% 高度处设一条"阅读基准线"。遍历所有卡片，找到顶部越过这条线且离它最近的卡片作为当前高亮目标。如果所有卡片都在基准线以下，高亮第一个。
+
+### 四个文件的实现对照
+
+| 文件 | 函数名 | 索引元素 | 条目选择器 | 卡片选择器 | 调用位置 |
+|------|--------|----------|-----------|-----------|----------|
+| tool-quant.html | `setupMiniScrollSpy()` | `#miniIndex` | `.mi-item[data-mijump]` | `.card[data-pt]` | `render()` → `renderMiniIndex()` + `renderMain()` 之后 |
+| tool-notebook.html | `setupMiniScrollSpy()` | `#pinkMiniIndex` | `.mi-item[data-mpt]` | `#app .card[data-pt]` | `render()` → `syncPinkRail()` 之后 |
+| tool-graphic.html | `setupMiniScrollSpy()` | `#browseMiniIndex` | `.mi-item[data-topic-id]` | `#browseView .topic[data-topic-id]` | `renderBrowse()` → `renderBrowseMiniIndex()` 之后 |
+| tool-translate.html | `setupTocScrollSpy()` | `#tocList a` | `a[data-for]` | `.card[id]` | `renderAll()` → `renumber()` 之后 |
+
+## 高亮悬浮面板命名规范
+
+左侧导航栏的「★」高亮图标有一个悬浮面板（颜色 + 样式选择），其 class 和逻辑必须与 mini-index 滚动高亮**完全独立**，不能共用 class 名。
+
+- 高亮面板相关 class：`#hlRailWrap` / `.hl-flyout` / `.hl-color-dot` / `.hl-style-btn` / `.pk-open`
+- 小索引滚动高亮 class：`.mi-item.active`
+- **禁止**让高亮面板的 hover 触发区域（`#hlRailWrap`）延伸到 mini-index 区域（之前 `padding-right:220px` 导致重叠误触发，已修复为移除 padding）
+
+## 数据文件
+
+- `data/quant-data.json` — 数量关系知识库（13 板块 / 33 分组 / 62 知识点，89KB），是 tool-quant.html 的只读数据源。包含三级结构 `categories → groups → points`，每个 point 有 `id / tag / title / core / formula / bullets / examples / tips / diagram` 字段
+- `data/raw-txt/` — PDF 提取中间文本文件（22 个 .txt，约 200KB），是生成 quant-data.json 的原始素材，量化工具已不再直接引用，可考虑清理
 
 ## Deploy
 
