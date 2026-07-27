@@ -188,7 +188,15 @@
   mark.hl{padding:0 2px;border-radius:3px;color:inherit;}
   .hl-yellow{background:var(--hl-yellow);}.hl-green{background:var(--hl-green);}.hl-blue{background:var(--hl-blue);}.hl-pink{background:var(--hl-pink);}
   .hl-ul{text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:2px;}
+  .hl-ul[data-hlc="pink"]{text-decoration-color:var(--hl-pink);}
+  .hl-ul[data-hlc="yellow"]{text-decoration-color:var(--hl-yellow);}
+  .hl-ul[data-hlc="green"]{text-decoration-color:var(--hl-green);}
+  .hl-ul[data-hlc="blue"]{text-decoration-color:var(--hl-blue);}
   .hl-wl{text-decoration:wavy underline;text-underline-offset:2px;text-decoration-thickness:1.5px;}
+  .hl-wl[data-hlc="pink"]{text-decoration-color:var(--hl-pink);}
+  .hl-wl[data-hlc="yellow"]{text-decoration-color:var(--hl-yellow);}
+  .hl-wl[data-hlc="green"]{text-decoration-color:var(--hl-green);}
+  .hl-wl[data-hlc="blue"]{text-decoration-color:var(--hl-blue);}
 
   /* 高亮图标悬浮面板（容器加 padding-right 延长 hover 区域，消除面板和图标间的缝隙） */
   #hlRailWrap{position:relative;}
@@ -456,8 +464,8 @@ function normExamples(arr){
 function fracRender(str){
   const escaped=esc(str);
   const withHl=escaped.replace(/\{\{hl:([a-z]+)\|([\s\S]*?)\}\}/g,(m,color,inner)=>`<mark class="hl hl-${color}">${inner}</mark>`)
-    .replace(/\{\{ul:([a-z]+)\|([\s\S]*?)\}\}/g,(m,color,inner)=>`<span class="hl-ul" style="text-decoration-color:var(--hl-${color})">${inner}</span>`)
-    .replace(/\{\{wl:([a-z]+)\|([\s\S]*?)\}\}/g,(m,color,inner)=>`<span class="hl-wl" style="text-decoration-color:var(--hl-${color})">${inner}</span>`);
+    .replace(/\{\{ul:([a-z]+)\|([\s\S]*?)\}\}/g,(m,color,inner)=>`<span class="hl-ul" data-hlc="${color}">${inner}</span>`)
+    .replace(/\{\{wl:([a-z]+)\|([\s\S]*?)\}\}/g,(m,color,inner)=>`<span class="hl-wl" data-hlc="${color}">${inner}</span>`);
   const cleaned=withHl.replace(/\[\[([^\/\[\]]+)\/([^\/\[\]]*?)\)([A-Za-z一-鿿0-9])/g,'[[$1/$2]])$3');
   const withFrac=cleaned.replace(/\[\[([^\[\]|\/]+)[|\/]([^\[\]|\/]+)\]\]/g,(m,num,den)=>`<span class="frac"><span class="frac-num">${num}</span><span class="frac-den">${den}</span></span>`);
   return withFrac.replace(/\^([A-Za-z0-9一-鿿+\-.%/()]{1,8})\^/g,'<sup>$1</sup>').replace(/~([A-Za-z0-9一-鿿+\-.%/()]{1,8})~/g,'<sub>$1</sub>').replace(/\[\[[^\]]*\]\]/g,'');
@@ -491,12 +499,10 @@ function serializeHl(el){
         const color=cc?cc.slice(3):HL_COLORS[0];
         out+=`{{hl:${color}|${serializeHl(node)}}}`;
       } else if(node.classList&&node.classList.contains('hl-ul')){
-        const m=node.style.textDecorationColor.match(/var\(--hl-(\w+)\)/);
-        const color=m?m[1]:HL_COLORS[0];
+        const color=node.dataset.hlc||HL_COLORS[0];
         out+=`{{ul:${color}|${serializeHl(node)}}}`;
       } else if(node.classList&&node.classList.contains('hl-wl')){
-        const m=node.style.textDecorationColor.match(/var\(--hl-(\w+)\)/);
-        const color=m?m[1]:HL_COLORS[0];
+        const color=node.dataset.hlc||HL_COLORS[0];
         out+=`{{wl:${color}|${serializeHl(node)}}}`;
       } else if(node.tagName==='SUP'){ out+=`^${serializeHl(node)}^`; }
       else if(node.tagName==='SUB'){ out+=`~${serializeHl(node)}~`; }
@@ -539,8 +545,8 @@ function tryHighlightSelection(){
   const ea=atomOf(range.endContainer); if(ea&&container.contains(ea)) range.setEndAfter(ea);
   if(range.collapsed) return;
   let wrapper;
-  if(UI.highlightStyle==='ul'){ wrapper=document.createElement('span'); wrapper.className='hl-ul'; wrapper.style.textDecorationColor='var(--hl-'+UI.highlightColor+')'; }
-  else if(UI.highlightStyle==='wl'){ wrapper=document.createElement('span'); wrapper.className='hl-wl'; wrapper.style.textDecorationColor='var(--hl-'+UI.highlightColor+')'; }
+  if(UI.highlightStyle==='ul'){ wrapper=document.createElement('span'); wrapper.className='hl-ul'; wrapper.dataset.hlc=UI.highlightColor; }
+  else if(UI.highlightStyle==='wl'){ wrapper=document.createElement('span'); wrapper.className='hl-wl'; wrapper.dataset.hlc=UI.highlightColor; }
   else{ wrapper=document.createElement('mark'); wrapper.className='hl hl-'+UI.highlightColor; }
   try{range.surroundContents(wrapper);}catch(e){const frag=range.extractContents();wrapper.appendChild(frag);range.insertNode(wrapper);}
   sel.removeAllRanges();
@@ -1352,6 +1358,7 @@ function bindRailEvents(){
       document.querySelectorAll('#hlColorDots .hl-color-dot').forEach(d=>d.classList.remove('active'));
       dot.classList.add('active');
       if(!UI.highlightActive){ UI.highlightActive=true; hlBtn.classList.add('active'); }
+      setTimeout(()=>hlWrap.classList.remove('pk-open'),250);
     };
   });
   // 样式选择
@@ -1362,6 +1369,7 @@ function bindRailEvents(){
       document.querySelectorAll('#hlStyleBtns .hl-style-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       if(!UI.highlightActive){ UI.highlightActive=true; hlBtn.classList.add('active'); }
+      setTimeout(()=>hlWrap.classList.remove('pk-open'),250);
     };
   });
   // 同步当前状态到面板
