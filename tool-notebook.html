@@ -2541,7 +2541,6 @@ function openGroupModal(catId, editId){
       cat.groups.push({id:uid('g'), name, points:[]});
     }
     saveData(); closeModal(); render();
-    }finally{ sb.disabled=false; sb.textContent=sbt; }
   };
 }
 function deleteGroup(catId, gid){
@@ -2713,8 +2712,6 @@ function openPointModal(catId, grpId, editId){
   };
 
   document.getElementById('m-save').onclick = ()=>{
-    const sb=document.getElementById('m-save'); if(sb.disabled) return; sb.disabled=true; const sbt=sb.textContent; sb.textContent='保存中…';
-    try{
     const title = document.getElementById('m-title').value.trim();
     const cid = document.getElementById('m-cat').value;
     const gid = document.getElementById('m-grp').value;
@@ -2754,7 +2751,6 @@ function openPointModal(catId, grpId, editId){
     }
     ui.activeCat = cid;
     saveData(); closeModal(); render();
-    }finally{ sb.disabled=false; sb.textContent=sbt; }
   };
 }
 
@@ -2911,8 +2907,6 @@ function openMistakeModal(editId, presetPointId){
     await ingestFiles(e.dataTransfer && e.dataTransfer.files);
   });
   document.getElementById('m-save').onclick = ()=>{
-    const sb=document.getElementById('m-save'); if(sb.disabled) return; sb.disabled=true; const sbt=sb.textContent; sb.textContent='保存中…';
-    try{
     const title = document.getElementById('m-title').value.trim();
     const content = document.getElementById('m-content').value.trim();
     const tags = [...document.querySelectorAll('#m-checks input:checked')].map(i=>i.value);
