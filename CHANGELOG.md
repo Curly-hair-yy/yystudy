@@ -29,3 +29,4 @@
 - 修复 tool-graphic.html 保存按钮无 loading 状态导致重复提交的问题（tool-quant/notebook 同步修复）
 ---
 - 修复取消加入错题本勾选后卡片操作按钮竖直堆叠的布局bug（note-actions改为横排）
+- 修复错题本操作按钮布局回归问题（编辑/加入错题本或移出错题本/删除三项，已加入与未加入两种状态统一横排对齐），并将默认文字颜色从 --ink-faint 加深为 --ink-soft，悬停色改为 --accent 粉色
