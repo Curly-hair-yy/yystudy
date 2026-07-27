@@ -37,4 +37,5 @@
 - 修复 tool-translate.html 高亮/下划线悬浮面板永远不显示的 bug：面板 DOM 上残留 `hidden=""` 属性，浏览器对 `[hidden]` 元素套用 `display:none` 且优先级高于任何 opacity/visibility 过渡，导致 CSS 的 hover/open 显示规则永远生效不了；JS 的 toggle 逻辑也从未处理过这个属性。以后排查"悬浮/弹出面板不出现"类问题，先检查元素本身有没有 `hidden` 属性或 `display:none` 的内联样式，不要只查 hover/opacity 相关 CSS 规则
 - 颜色方案改为以 tool-translate.html 的原始调色板为准：薄荷绿 #CFE9E2、雾玫瑰 #FCD4D8、奶油色 #F3EADA、卡其色 #EDDAC9 + 新增蓝色 #C6DCF6，共 5 色，替换此前"6 色"方案（黄/绿/蓝/粉/米/玫红），统一应用到 tool-quant.html、tool-notebook.html、tool-translate.html（tool-graphic.html 未接入高亮功能，未改动）；已保存数据里的旧色名（yellow/green/pink）自动映射到新色（khaki/mint/rose），不会丢失颜色
 - 调整薄荷绿主题配色：accent 改为柔和灰绿 #9CC8C1，tip-bg 改为浅雾蓝 #D6EEF2，废弃之前偏鲜艳的翡翠绿方案
-- 确定薄荷绿主题最终配色：accent #73AE52（苹果青，柔和草绿），tip-bg #FBF1D7（奶酪色，暖米黄调）。修复 pt-tips 提示框背景变量引用从 --accent-soft 改为 --tip-bg，让 --tip-bg 变量真正生效。同步更新派生变量 --accent-soft/#E6F2DF、--tip/#73AE52、--coral/#73AE52、--coral-bg/#E6F2DF
+- 确定薄荷绿主题最终配色（v2）：accent #73AE52（苹果青，柔和草绿），tip-bg #FBF1D7（奶酪色，暖米黄调）。修复 pt-tips 提示框背景变量引用从 --accent-soft 改为 --tip-bg，让 --tip-bg 变量真正生效。同步更新派生变量 --accent-soft/#E6F2DF、--tip/#73AE52、--coral/#73AE52、--coral-bg/#E6F2DF
+- 薄荷绿主题最终三色方案：accent #81B77B（鼠尾草绿 Basil Dew），tip-bg #E5F7A9（浅黄绿 Glass Lime），新增 --accent-hover #C7F7FF（浅青蓝 Soda Bubble）。12 个 hover 规则从 color:var(--accent) 改为 color:var(--accent-hover)，形成「常态鼠尾草绿 → 悬停浅青蓝 → 提示框浅黄绿」三色层次。:root 定义 --accent-hover:var(--accent) 确保文艺粉皮肤悬停行为不变
