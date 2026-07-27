@@ -675,17 +675,17 @@
 
     <div class="toc-controls-row" id="tocControlsRow">
       <div class="mark-tool" data-tool="highlight">
-      <button class="btn-ghost mark-toggle icon-only" id="highlightToggleBtn" onclick="toggleMarkMode('highlight')" title="高亮" aria-label="高亮"><svg class="svgi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l6-6 4 4-6 6H9z"></path><path d="M9 11l-4 8 8-4"></path><path d="M13 5l4 4"></path></svg><span class="color-dot" id="highlightColorDot" style="background: #F8D3DE;"></span></button>
+      <button class="btn-ghost mark-toggle icon-only" id="highlightToggleBtn" onclick="toggleMarkMode('highlight')" title="高亮" aria-label="高亮"><svg class="svgi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l6-6 4 4-6 6H9z"></path><path d="M9 11l-4 8 8-4"></path><path d="M13 5l4 4"></path></svg><span class="color-dot" id="highlightColorDot" style="background: #CFE9E2;"></span></button>
       <button class="btn-ghost mark-caret" onclick="toggleMarkPopover('highlight')" title="选择高亮颜色"><svg class="svgi svgi-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></button>
-      <div class="mark-popover" id="highlightPopover" hidden="">
-        <div class="swatch-row" id="highlightSwatches"><button type="button" class="swatch" style="background:#F9E9AE;"></button><button type="button" class="swatch" style="background:#D3EAC4;"></button><button type="button" class="swatch" style="background:#C6DCF6;"></button><button type="button" class="swatch selected" style="background:#F8D3DE;"></button><button type="button" class="swatch" style="background:#F3EADA;"></button><button type="button" class="swatch" style="background:#FCD4D8;"></button></div>
+      <div class="mark-popover" id="highlightPopover">
+        <div class="swatch-row" id="highlightSwatches"><button type="button" class="swatch selected" style="background:#CFE9E2;"></button><button type="button" class="swatch" style="background:#FCD4D8;"></button><button type="button" class="swatch" style="background:#F3EADA;"></button><button type="button" class="swatch" style="background:#EDDAC9;"></button><button type="button" class="swatch" style="background:#C6DCF6;"></button></div>
       </div>
     </div>
     <div class="mark-tool" data-tool="underline">
-      <button class="btn-ghost mark-toggle icon-only" id="underlineToggleBtn" onclick="toggleMarkMode('underline')" title="下划线" aria-label="下划线"><svg class="svgi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a6 6 0 0012 0V4"></path><path d="M4 20h16"></path></svg><span class="color-dot" id="underlineColorDot" style="background: #F8D3DE;"></span></button>
+      <button class="btn-ghost mark-toggle icon-only" id="underlineToggleBtn" onclick="toggleMarkMode('underline')" title="下划线" aria-label="下划线"><svg class="svgi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v6a6 6 0 0012 0V4"></path><path d="M4 20h16"></path></svg><span class="color-dot" id="underlineColorDot" style="background: #CFE9E2;"></span></button>
       <button class="btn-ghost mark-caret" onclick="toggleMarkPopover('underline')" title="选择下划线颜色/样式"><svg class="svgi svgi-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></button>
-      <div class="mark-popover" id="underlinePopover" hidden="">
-        <div class="swatch-row" id="underlineSwatches"><button type="button" class="swatch" style="background:#F9E9AE;"></button><button type="button" class="swatch" style="background:#D3EAC4;"></button><button type="button" class="swatch" style="background:#C6DCF6;"></button><button type="button" class="swatch selected" style="background:#F8D3DE;"></button><button type="button" class="swatch" style="background:#F3EADA;"></button><button type="button" class="swatch" style="background:#FCD4D8;"></button></div>
+      <div class="mark-popover" id="underlinePopover">
+        <div class="swatch-row" id="underlineSwatches"><button type="button" class="swatch selected" style="background:#CFE9E2;"></button><button type="button" class="swatch" style="background:#FCD4D8;"></button><button type="button" class="swatch" style="background:#F3EADA;"></button><button type="button" class="swatch" style="background:#EDDAC9;"></button><button type="button" class="swatch" style="background:#C6DCF6;"></button></div>
         <div class="style-row">
           <button type="button" class="style-btn active" id="underlineStyleSolid" onclick="pickUnderlineStyle('solid')">直线</button>
           <button type="button" class="style-btn" id="underlineStyleWavy" onclick="pickUnderlineStyle('wavy')">波浪线</button>
@@ -2060,10 +2060,10 @@ function initFontSize(){
 let highlightMode = false;
 let underlineMode = false;
 let eraserMode = false;
-const HIGHLIGHT_COLORS = ['#F9E9AE', '#D3EAC4', '#C6DCF6', '#F8D3DE', '#F3EADA', '#FCD4D8'];
-const UNDERLINE_COLORS = ['#F9E9AE', '#D3EAC4', '#C6DCF6', '#F8D3DE', '#F3EADA', '#FCD4D8'];
-let currentHighlightColor = HIGHLIGHT_COLORS[3];
-let currentUnderlineColor = UNDERLINE_COLORS[3];
+const HIGHLIGHT_COLORS = ['#CFE9E2', '#FCD4D8', '#F3EADA', '#EDDAC9', '#C6DCF6'];
+const UNDERLINE_COLORS = ['#CFE9E2', '#FCD4D8', '#F3EADA', '#EDDAC9', '#C6DCF6'];
+let currentHighlightColor = HIGHLIGHT_COLORS[0];
+let currentUnderlineColor = UNDERLINE_COLORS[0];
 let currentUnderlineStyle = 'solid';
 
 function buildSwatches(containerEl, colors, current, onPick){

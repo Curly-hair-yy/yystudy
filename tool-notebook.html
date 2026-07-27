@@ -32,7 +32,7 @@
     --orange:#C4635F;  --orange-bg:#F8E7E4;
     --slate:#66788F;   --slate-bg:#EAEEF3;
 
-    --hl-yellow:#F9E9AE; --hl-green:#D3EAC4; --hl-blue:#C6DCF6; --hl-pink:#F8D3DE; --hl-cream:#F3EADA; --hl-rose:#FCD4D8;
+    --hl-mint:#CFE9E2; --hl-rose:#FCD4D8; --hl-cream:#F3EADA; --hl-khaki:#EDDAC9; --hl-blue:#C6DCF6;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
@@ -266,10 +266,11 @@
 
   /* 高亮标记 */
   mark.hl{padding:0 2px;border-radius:3px;color:inherit;}
-  .hl-yellow{background:var(--hl-yellow);}
-  .hl-green{background:var(--hl-green);}
+  .hl-mint{background:var(--hl-mint);}
+  .hl-rose{background:var(--hl-rose);}
+  .hl-cream{background:var(--hl-cream);}
+  .hl-khaki{background:var(--hl-khaki);}
   .hl-blue{background:var(--hl-blue);}
-  .hl-pink{background:var(--hl-pink);}
   .hl-toolbar-wrap{position:relative;}
   .hl-palette{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;padding:9px;display:flex;gap:7px;box-shadow:0 12px 28px rgba(0,0,0,.15);z-index:60;}
   .hl-swatch{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid rgba(0,0,0,.08);padding:0;}
@@ -1452,7 +1453,7 @@ let DATA = null;
 const ui = {activeTab:'framework', activeCat:null, openMistakes:new Set(), sumFilterCat:'all', hlPaletteOpen:false, highlightActive:false, highlightColor:null};
 let pendingImages = [];
 let pendingExamples = [];
-const HL_COLORS = ['yellow','green','blue','pink','cream','rose'];
+const HL_COLORS = ['mint','rose','cream','khaki','blue'];
 
 /* 例题兼容层：老数据是字符串（一行一条），新数据是 {text, images:[]} */
 function normExamples(arr){
@@ -1805,10 +1806,11 @@ function esc(str){
 
 /* ================= 富文本语法 =================
    分数：[[分子/分母]]；高亮：{{hl:颜色|文字}}；上标：x^2^；下标：x~1~ */
+const LEGACY_COLOR_MAP = {yellow:'khaki', green:'mint', pink:'rose'};
 function fracRender(str){
   const escaped = esc(str);
   const withHl = escaped.replace(/\{\{hl:([a-z]+)\|([\s\S]*?)\}\}/g, (m, color, inner)=>
-    `<mark class="hl hl-${color}">${inner}</mark>`);
+    `<mark class="hl hl-${LEGACY_COLOR_MAP[color]||color}">${inner}</mark>`);
   const withFrac = withHl.replace(/\[\[([^\[\]|\/]+)[|\/]([^\[\]|\/]+)\]\]/g, (m, num, den)=>
     `<span class="frac"><span class="frac-num">${num}</span><span class="frac-den">${den}</span></span>`);
   // 上下标内容允许数字/字母/汉字/常见数学符号，不允许空格和标点，最长8字

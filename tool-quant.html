@@ -16,7 +16,7 @@
     --tip: #E8317C; --tip-bg: #FDF3F7; --coral: #E8317C; --coral-bg: #FDEAF1;
     --serif: "Noto Serif SC","Songti SC","STSong","SimSun",serif;
     --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    --hl-yellow:#F9E9AE; --hl-green:#D3EAC4; --hl-blue:#C6DCF6; --hl-pink:#F8D3DE; --hl-cream:#F3EADA; --hl-rose:#FCD4D8;
+    --hl-mint:#CFE9E2; --hl-rose:#FCD4D8; --hl-cream:#F3EADA; --hl-khaki:#EDDAC9; --hl-blue:#C6DCF6;
     --font-scale:1;
   }
   *{box-sizing:border-box;}
@@ -188,17 +188,17 @@
 
   /* 高亮标记 */
   mark.hl{padding:0 2px;border-radius:3px;color:inherit;font-size:inherit;font-weight:inherit;}
-  .hl-yellow{background:var(--hl-yellow);}.hl-green{background:var(--hl-green);}.hl-blue{background:var(--hl-blue);}.hl-pink{background:var(--hl-pink);}.hl-cream{background:var(--hl-cream);}.hl-rose{background:var(--hl-rose);}
+  .hl-mint{background:var(--hl-mint);}.hl-rose{background:var(--hl-rose);}.hl-cream{background:var(--hl-cream);}.hl-khaki{background:var(--hl-khaki);}.hl-blue{background:var(--hl-blue);}
   .hl-ul{text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:2px;color:inherit;font-size:inherit;font-weight:inherit;}
-  .hl-ul[data-hlc="pink"]{text-decoration-color:var(--hl-pink);}
-  .hl-ul[data-hlc="yellow"]{text-decoration-color:var(--hl-yellow);}
-  .hl-ul[data-hlc="green"]{text-decoration-color:var(--hl-green);}
-  .hl-ul[data-hlc="blue"]{text-decoration-color:var(--hl-blue);}.hl-ul[data-hlc="cream"]{text-decoration-color:var(--hl-cream);}.hl-ul[data-hlc="rose"]{text-decoration-color:var(--hl-rose);}
+  .hl-ul[data-hlc="mint"]{text-decoration-color:var(--hl-mint);}
+  .hl-ul[data-hlc="rose"]{text-decoration-color:var(--hl-rose);}
+  .hl-ul[data-hlc="cream"]{text-decoration-color:var(--hl-cream);}
+  .hl-ul[data-hlc="khaki"]{text-decoration-color:var(--hl-khaki);}.hl-ul[data-hlc="blue"]{text-decoration-color:var(--hl-blue);}
   .hl-wl{text-decoration:wavy underline;text-underline-offset:2px;text-decoration-thickness:1.5px;color:inherit;font-size:inherit;font-weight:inherit;}
-  .hl-wl[data-hlc="pink"]{text-decoration-color:var(--hl-pink);}
-  .hl-wl[data-hlc="yellow"]{text-decoration-color:var(--hl-yellow);}
-  .hl-wl[data-hlc="green"]{text-decoration-color:var(--hl-green);}
-  .hl-wl[data-hlc="blue"]{text-decoration-color:var(--hl-blue);}.hl-wl[data-hlc="cream"]{text-decoration-color:var(--hl-cream);}.hl-wl[data-hlc="rose"]{text-decoration-color:var(--hl-rose);}
+  .hl-wl[data-hlc="mint"]{text-decoration-color:var(--hl-mint);}
+  .hl-wl[data-hlc="rose"]{text-decoration-color:var(--hl-rose);}
+  .hl-wl[data-hlc="cream"]{text-decoration-color:var(--hl-cream);}
+  .hl-wl[data-hlc="khaki"]{text-decoration-color:var(--hl-khaki);}.hl-wl[data-hlc="blue"]{text-decoration-color:var(--hl-blue);}
 
   /* 高亮图标悬浮面板（容器加 padding-right 延长 hover 区域，消除面板和图标间的缝隙） */
   #hlRailWrap{position:relative;}
@@ -208,9 +208,10 @@
   .hl-colors{display:flex;gap:8px;}
   .hl-color-dot{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;padding:0;transition:border-color .12s;}
   .hl-color-dot.active{border-color:var(--ink);}
-  .hl-color-dot[data-hlc="pink"]{background:var(--hl-pink);}
-  .hl-color-dot[data-hlc="yellow"]{background:var(--hl-yellow);}
-  .hl-color-dot[data-hlc="green"]{background:var(--hl-green);}
+  .hl-color-dot[data-hlc="mint"]{background:var(--hl-mint);}
+  .hl-color-dot[data-hlc="rose"]{background:var(--hl-rose);}
+  .hl-color-dot[data-hlc="cream"]{background:var(--hl-cream);}
+  .hl-color-dot[data-hlc="khaki"]{background:var(--hl-khaki);}
   .hl-color-dot[data-hlc="blue"]{background:var(--hl-blue);}
   .hl-styles{display:flex;gap:4px;}
   .hl-style-btn{flex:1;border:1px solid var(--border);background:var(--surface);border-radius:6px;padding:6px 4px;cursor:pointer;font-size:15px;text-align:center;color:var(--ink-soft);font-family:var(--serif);transition:background .12s,color .12s,border-color .12s;}
@@ -346,12 +347,11 @@
     <div class="hl-flyout" id="hlFlyout">
       <div class="hl-flyout-label">颜色</div>
       <div class="hl-colors" id="hlColorDots">
-        <button class="hl-color-dot active" data-hlc="pink" title="粉色"></button>
-        <button class="hl-color-dot" data-hlc="yellow" title="黄色"></button>
-        <button class="hl-color-dot" data-hlc="green" title="绿色"></button>
+        <button class="hl-color-dot active" data-hlc="mint" title="薄荷绿"></button>
+        <button class="hl-color-dot" data-hlc="rose" title="雾玫瑰"></button>
+        <button class="hl-color-dot" data-hlc="cream" title="奶油色"></button>
+        <button class="hl-color-dot" data-hlc="khaki" title="卡其色"></button>
         <button class="hl-color-dot" data-hlc="blue" title="蓝色"></button>
-	        <button class="hl-color-dot" data-hlc="cream" title="米色"></button>
-	        <button class="hl-color-dot" data-hlc="rose" title="玫红"></button>
       </div>
       <div class="hl-flyout-label">样式</div>
       <div class="hl-styles" id="hlStyleBtns">
@@ -381,12 +381,11 @@
       <div class="hl-toolbar-wrap">
         <button id="btnHlToggle" title="高亮：选个颜色，再去下面内容里选中文字就能高亮">🖍 高亮标记</button>
         <div class="hl-palette" id="hlPalette" style="display:none;">
-          <button type="button" class="hl-swatch" data-hlcolor="yellow" style="background:var(--hl-yellow)" title="黄色高亮"></button>
-          <button type="button" class="hl-swatch" data-hlcolor="green" style="background:var(--hl-green)" title="绿色高亮"></button>
+          <button type="button" class="hl-swatch" data-hlcolor="mint" style="background:var(--hl-mint)" title="薄荷绿高亮"></button>
+          <button type="button" class="hl-swatch" data-hlcolor="rose" style="background:var(--hl-rose)" title="雾玫瑰高亮"></button>
+          <button type="button" class="hl-swatch" data-hlcolor="cream" style="background:var(--hl-cream)" title="奶油色高亮"></button>
+          <button type="button" class="hl-swatch" data-hlcolor="khaki" style="background:var(--hl-khaki)" title="卡其色高亮"></button>
           <button type="button" class="hl-swatch" data-hlcolor="blue" style="background:var(--hl-blue)" title="蓝色高亮"></button>
-          <button type="button" class="hl-swatch" data-hlcolor="pink" style="background:var(--hl-pink)" title="粉色高亮"></button>
-	          <button type="button" class="hl-swatch" data-hlcolor="cream" style="background:var(--hl-cream)" title="米色高亮"></button>
-	          <button type="button" class="hl-swatch" data-hlcolor="rose" style="background:var(--hl-rose)" title="玫红高亮"></button>
           <button type="button" class="hl-swatch off" data-hlcolor="" title="关闭高亮">✕</button>
         </div>
       </div>
@@ -419,7 +418,7 @@
 
 <script>
 /* ================= 状态与常量 ================= */
-const HL_COLORS = ['yellow','green','blue','pink','cream','rose'];
+const HL_COLORS = ['mint','rose','cream','khaki','blue'];
 const STORE_KEY = 'quant_data';
 const FONT_KEY = 'quant_font_level';
 const FONT_LEVELS = [
@@ -433,7 +432,7 @@ let DATA = { categories: [], mistakes: [] };
 let UI = {
   mode: 'browse', activeCat: 'c_shuzi_fangcheng', scrollTo: null,
   _mermaidReady: false, _mermaidLoading: false,
-  highlightActive: false, highlightColor: 'pink', highlightStyle: 'bg', hlPaletteOpen: false,
+  highlightActive: false, highlightColor: 'mint', highlightStyle: 'bg', hlPaletteOpen: false,
   settingsOpen: false, fontLevel: 1, openMistakes: new Set()
 };
 let undoStack = [], redoStack = [];
@@ -588,20 +587,39 @@ function parseLegacyMarkup(str){
   }
   return {text:out,marks};
 }
+/* 旧色卡（yellow/green/pink）被这次改色方案废弃，已保存的 mark 顺带映射到最接近的新色，
+   避免颜色名对不上 CSS class 导致标记静默失去颜色 */
+const LEGACY_COLOR_MAP={yellow:'khaki',green:'mint',pink:'rose'};
+function remapLegacyColor(color){ return LEGACY_COLOR_MAP[color]||color; }
+function remapMarksColors(marks){
+  return (marks||[]).map(m=>{
+    const nc=remapLegacyColor(m.color);
+    return nc===m.color?m:{...m,color:nc};
+  });
+}
 function migrateAllRichText(DATA){
   let changed=false;
   const migrateField=(container,key)=>{
-    const cur=container[key];
-    if(cur&&typeof cur==='object'&&Array.isArray(cur.marks)) return;
-    container[key]=parseLegacyMarkup(typeof cur==='string'?cur:'');
-    changed=true;
+    let cur=container[key];
+    if(!(cur&&typeof cur==='object'&&Array.isArray(cur.marks))){
+      cur=parseLegacyMarkup(typeof cur==='string'?cur:'');
+      changed=true;
+    }
+    const remapped=remapMarksColors(cur.marks);
+    if(remapped.some((m,i)=>m!==cur.marks[i])){ cur={...cur,marks:remapped}; changed=true; }
+    container[key]=cur;
   };
   const migrateArr=(container,key)=>{
     if(!Array.isArray(container[key])) return;
     container[key]=container[key].map(v=>{
-      if(v&&typeof v==='object'&&Array.isArray(v.marks)) return v;
-      changed=true;
-      return parseLegacyMarkup(typeof v==='string'?v:'');
+      let cur=v;
+      if(!(cur&&typeof cur==='object'&&Array.isArray(cur.marks))){
+        cur=parseLegacyMarkup(typeof cur==='string'?cur:'');
+        changed=true;
+      }
+      const remapped=remapMarksColors(cur.marks);
+      if(remapped.some((m,i)=>m!==cur.marks[i])){ cur={...cur,marks:remapped}; changed=true; }
+      return cur;
     });
   };
   (DATA.categories||[]).forEach(c=>c.groups.forEach(g=>g.points.forEach(p=>{
@@ -610,7 +628,10 @@ function migrateAllRichText(DATA){
     migrateArr(p,'tips');
     if(p.examples){
       const before=JSON.stringify(p.examples);
-      p.examples=normExamples(p.examples);
+      p.examples=normExamples(p.examples).map(ex=>{
+        const remapped=remapMarksColors(ex.marks);
+        return remapped.some((m,i)=>m!==ex.marks[i])?{...ex,marks:remapped}:ex;
+      });
       if(JSON.stringify(p.examples)!==before) changed=true;
     }
   })));
