@@ -21,9 +21,9 @@
   }
   /* 薄荷绿皮肤（浅薄荷绿 accent + 同色系渐变tip-bg + 蓝色操作按钮） */
   html[data-theme="mint"]{
-    --accent:#C1E9D2; --accent-soft:#E7F6EF; --accent-hover:#C1E9D2;
-    --tip:#C1E9D2; --tip-bg:linear-gradient(135deg, #91C1B9 0%, #DEF0ED 100%);
-    --coral:#C1E9D2; --coral-bg:#E7F6EF;
+    --accent:#9CC8C1; --accent-soft:#DCF0EC; --accent-hover:#C7F7FF;
+    --tip:#9CC8C1; --tip-bg:#D6EEF2;
+    --coral:#9CC8C1; --coral-bg:#DCF0EC;
   }
   html[data-theme="mint"] .pk-actionrow .addhere{color:#5D9BEC;}
   *{box-sizing:border-box;}
@@ -127,6 +127,7 @@
   .cat-header{margin-bottom:22px;}
   .cat-header h1{font-family:var(--serif);font-size:calc(22px*var(--font-scale));font-weight:800;color:var(--ink);margin:0 0 6px;}
   .cat-header .cat-subtitle{font-size:14px;color:var(--ink-soft);font-family:var(--serif);margin:0;padding-bottom:14px;border-bottom:1px solid var(--border);}
+  .pk-waveline{height:36px;margin:0 0 24px;background:repeating-linear-gradient(90deg,var(--accent-soft) 0 2px,transparent 2px 6px);opacity:.8;border-radius:2px;-webkit-mask:linear-gradient(90deg,#000 0 60%,transparent);mask:linear-gradient(90deg,#000 0 60%,transparent);}
 
   /* 知识点分组 */
   .group{margin-bottom:28px;}
@@ -1522,7 +1523,7 @@ function renderMain(){
     return `<div class="group" data-grp="${g.id}"><div class="group-head"><h2>${esc(g.name)}</h2><span class="cnt">${points.length} 个知识点</span></div>${cards}</div>`;
   }).join('');
 
-  document.getElementById('app').innerHTML=headerHtml+groupsHtml;
+  document.getElementById('app').innerHTML=headerHtml+'<div class="pk-waveline"></div>'+groupsHtml;
 
   // 图片缩放
   document.querySelectorAll('[data-action="zoom"]').forEach(img=>{ img.onclick=()=>{ document.getElementById('lbImg').src=img.dataset.src; document.getElementById('lightbox').classList.add('show'); }; });
