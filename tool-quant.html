@@ -636,7 +636,7 @@ async function loadData(){
   }catch(e){}
   if(!loaded||!DATA.categories||!DATA.categories.length){
     try{
-      const resp=await fetch('../data/quant-data.json');
+      const resp=await fetch('data/quant-data.json');
       if(resp.ok){ const json=await resp.json(); DATA.categories=json.categories||[]; DATA.mistakes=DATA.mistakes||[]; }
     }catch(err){ document.getElementById('app').innerHTML=`<div class="empty">数据加载失败：${esc(err.message)}</div>`; return; }
     // 首次加载：将斜杠分数 (a/b) 批量转为 [[a/b]] 堆叠分数格式，并写入 localStorage
