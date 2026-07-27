@@ -95,6 +95,21 @@ Supabase 项目，REST API endpoint：`https://tfvgntgamixgzjjvumcy.supabase.co/
 
 切换皮肤（如 tool-graphic.html 的 `.skin-pink`）后**必须调用 `renderAll()`**，否则 JS 动态生成的内容会残留上一套皮肤的样式/颜色值。
 
+#### tool-quant.html 薄荷绿皮肤 `html[data-theme="mint"]`
+
+**⚠️ 这是最终确定版，不要再反复调整色值。** 经过多轮迭代（#158F6D → #9CC8C1 → #89B1AC → #7B9762），最终确认以下两个核心变量：
+
+| 变量 | 色值 | 色名 | 用途 |
+|------|------|------|------|
+| `--accent` | `#73AE52` | 苹果青 | 强调色：标题装饰字、标签、按钮、答案文字、当前导航高亮 |
+| `--tip-bg` | `#FBF1D7` | 奶酪色 | 「思维拓展」/TIPS 提示框背景色 |
+
+派生变量自动跟随：`--accent-soft:#E6F2DF` / `--tip:#73AE52` / `--coral:#73AE52` / `--coral-bg:#E6F2DF`。
+
+其余所有变量（`--paper`、`--surface`、`--surface-alt`、`--ink`、`--ink-soft`、`--ink-faint`、`--border`、`--border-strong`、`--font-scale`、`--serif`、`--mono`、`--hl-*` 等）保持文艺粉皮肤原值，薄荷绿不覆盖。
+
+**关键 CSS 依赖**：`.pt-tips` 的 `background` 必须使用 `var(--tip-bg)` 而非 `var(--accent-soft)`（2026-07-27 修复），否则 `--tip-bg` 变量定义了也不会生效。
+
 ### 大文件
 
 不要读取 `data` 相关的数据文件（`data/quant-data.json` 约 89KB，但只读不写即可）——搜索、查找时跳过这些文件。`data/raw-txt/` 已删除（commit `4889492`），不再存在。
