@@ -39,3 +39,4 @@
 - 调整薄荷绿主题配色：accent 改为柔和灰绿 #9CC8C1，tip-bg 改为浅雾蓝 #D6EEF2，废弃之前偏鲜艳的翡翠绿方案
 - 确定薄荷绿主题最终配色（v2）：accent #73AE52（苹果青，柔和草绿），tip-bg #FBF1D7（奶酪色，暖米黄调）。修复 pt-tips 提示框背景变量引用从 --accent-soft 改为 --tip-bg，让 --tip-bg 变量真正生效。同步更新派生变量 --accent-soft/#E6F2DF、--tip/#73AE52、--coral/#73AE52、--coral-bg/#E6F2DF
 - 薄荷绿主题最终三色方案：accent #81B77B（鼠尾草绿 Basil Dew），tip-bg #E5F7A9（浅黄绿 Glass Lime），新增 --accent-hover #C7F7FF（浅青蓝 Soda Bubble）。12 个 hover 规则从 color:var(--accent) 改为 color:var(--accent-hover)，形成「常态鼠尾草绿 → 悬停浅青蓝 → 提示框浅黄绿」三色层次。:root 定义 --accent-hover:var(--accent) 确保文艺粉皮肤悬停行为不变
+- 薄荷绿皮肤回归青苹果绿方案：accent 回到 #73AE52，accent-hover 与 accent 同色 #73AE52（悬停不再变色），tip-bg 改为同色系浅绿 #D8ECCE（一定要浅）。派生变量 --accent-soft:#E2F1DA、--tip:#73AE52、--coral:#73AE52、--coral-bg:#E2F1DA
