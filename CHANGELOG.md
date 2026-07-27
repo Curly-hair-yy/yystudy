@@ -27,3 +27,5 @@
 - 性能优化：tool-graphic.html 图片从 JSON base64 迁移至 IndexedDB 独立存储，JSON 体量缩减 90%+
 - 性能优化：tool-graphic.html Supabase 同步改为 fire-and-forget（后台异步，不阻塞 UI 响应）
 - 修复 tool-graphic.html 保存按钮无 loading 状态导致重复提交的问题（tool-quant/notebook 同步修复）
+---
+- 修复取消加入错题本勾选后卡片操作按钮竖直堆叠的布局bug（note-actions改为横排）
