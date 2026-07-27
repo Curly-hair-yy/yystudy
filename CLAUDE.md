@@ -113,18 +113,21 @@ Supabase 项目，REST API endpoint：`https://tfvgntgamixgzjjvumcy.supabase.co/
 
 `tool-quant.html`、`tool-notebook.html`、`tool-translate.html` 三个工具共享一套标记系统。`tool-graphic.html` 暂不接入。
 
-### 颜色调色板（统一 6 色）
+### 颜色调色板（以 tool-translate.html 原始配色为准，共 5 色）
+
+以 tool-translate.html 最初的 4 色为基础（薄荷绿/雾玫瑰/奶油色/卡其色），额外加一个蓝色。**曾经短暂统一成"6 色"方案（黄/绿/蓝/粉/米/玫红），色值不对，已废弃**，不要再用那套。
 
 | 色名 | 变量 | 色值 |
 |------|------|------|
-| 粉 pastel | `--hl-pink` | `#F8D3DE` |
-| 黄 pastel | `--hl-yellow` | `#F9E9AE` |
-| 绿 pastel | `--hl-green` | `#D3EAC4` |
-| 蓝 pastel | `--hl-blue` | `#C6DCF6` |
-| 米 cream | `--hl-cream` | `#F3EADA` |
-| 玫红 rose | `--hl-rose` | `#FCD4D8` |
+| 薄荷绿 mint | `--hl-mint` | `#CFE9E2` |
+| 雾玫瑰 rose | `--hl-rose` | `#FCD4D8` |
+| 奶油色 cream | `--hl-cream` | `#F3EADA` |
+| 卡其色 khaki | `--hl-khaki` | `#EDDAC9` |
+| 蓝 blue | `--hl-blue` | `#C6DCF6` |
 
-JS 常量：`HL_COLORS = ['yellow','green','blue','pink','cream','rose']`
+JS 常量：`HL_COLORS = ['mint','rose','cream','khaki','blue']`（tool-translate.html 里没有命名，直接用 `HIGHLIGHT_COLORS`/`UNDERLINE_COLORS` 这两个同值的 hex 数组）。
+
+已保存数据里如果还有旧色名（`yellow`/`green`/`pink`），渲染时会自动映射到最接近的新色（`yellow→khaki`、`green→mint`、`pink→rose`），不会因为改色卡就丢失已标记的颜色。
 
 ### 标记类型
 
@@ -148,6 +151,8 @@ JS 常量：`HL_COLORS = ['yellow','green','blue','pink','cream','rose']`
 
 ### 渲染/序列化管线
 
+**⚠️ tool-quant.html 的标记数据结构已经重构，和下面这套不一样**：不再是"文本里内嵌 `{{hl:...}}` 语法"，而是 `{text, marks:[{start,end,type,color}]}` 结构化数组（`type:'bg'`/`'ul'`/`'wl'`），编辑时选区换算成纯文本偏移做纯数据计算，不再有 `serializeHl`/`commitHlField`，核心函数是 `migrateAllRichText`/`renderMarked`/`parseLegacyMarkup`/`applyMarkOp`/`tryHighlightSelection`（新版）。tool-notebook.html 和 tool-translate.html 仍是下面这套旧架构：
+
 - `fracRender(str)`：存储格式 → HTML（`{{hl:...}}` → `<mark>`，`[[a/b]]` → 堆叠分数，`^text^` → 上标，`~text~` → 下标）
 - `serializeHl(el)`：DOM → 存储格式（反向）
 - `tryHighlightSelection()`：获取 Selection Range → 包裹 `<span>`/`<mark>` → 调用 `commitHlField`
@@ -167,9 +172,11 @@ JS 常量：`HL_COLORS = ['yellow','green','blue','pink','cream','rose']`
 
 5. **小索引滚动高亮**：用"阅读锚点"判定（视口 35% 高度处），scroll 事件 + `requestAnimationFrame` 节流。三层结构只有知识点标题参与颜色变化，板块和分组标题固定黑色不参与。
 
-6. **工具间颜色同步**：曾出现 translate 用一套颜色、quant/notebook 用另一套的情况。现统一为 6 色标准色卡，三个工具保持一致。新增颜色时需同步更新四个位置：CSS 变量、`HL_COLORS` 数组、`mark.hl` 背景类、`hl-ul`/`hl-wl` 属性选择器。
+6. **工具间颜色同步**：曾出现 translate 用一套颜色、quant/notebook 用另一套的情况。中途统一成"6 色标准色卡"过一次，但色值取错了、和 translate 原始配色对不上。最终以 **translate 的原始 4 色（薄荷绿/雾玫瑰/奶油色/卡其色）+ 新增蓝色，共 5 色** 为准，三个工具保持一致（见上面「颜色调色板」表格）。新增/改动颜色时需同步更新四个位置：CSS 变量、`HL_COLORS`/`HIGHLIGHT_COLORS` 数组、`mark.hl`/`.hl-{name}` 背景类、`hl-ul`/`hl-wl` 属性选择器；改色名时记得给旧色名加映射（防止已保存的标记颜色对不上新 class 而"隐形"）。
 
 7. **批量脚本修改多文件后必须逐个验证语法**：曾用 Python 脚本给多个文件批量插入 `try/finally` 防重复提交代码，因文本匹配不精确，`tool-notebook.html` 出现了孤立 `finally` 块导致整个 JS 脚本解析失败、页面白屏。`tool-graphic.html` 当时被发现并修复了，但 `notebook` 被遗漏，直到用户反馈白屏才排查出来。教训：批量修改后必须对每个文件单独运行 `node --check` 验证 JS 语法，且要手动抽查关键函数的配对完整性（`try`/`catch`/`finally` 括号匹配）。
+
+8. **`hidden` 属性会覆盖 CSS 显示规则**：tool-translate.html 的高亮/下划线悬浮面板（`.mark-popover`）长期不出现，排查了几次都只看 `:hover`/`opacity`/`.open` 这套 CSS，没发现问题——真正原因是面板的 HTML 上还留着 `hidden=""` 属性，浏览器对 `[hidden]` 元素默认套用 `display:none`，而 `display:none` 的元素不管 opacity/visibility/class 怎么变都不会显示，JS 的 toggle 逻辑（`toggleMarkPopover`/`closeMarkPopovers`）也从来没碰过这个属性。**以后排查"悬浮面板/弹出层死活不出现"类问题，第一步应该是在 Elements 面板检查元素本身有没有 `hidden` 属性或内联 `display:none`，而不是一上来就扎进 hover/opacity 相关的 CSS 规则里找**。
 
 ## 小索引滚动高亮功能
 
