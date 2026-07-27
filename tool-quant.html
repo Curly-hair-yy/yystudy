@@ -254,7 +254,7 @@
   .modal label{display:block;font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);margin:12px 0 5px;}
   .modal label .hint{color:var(--ink-faint);font-weight:400;}
   .modal input[type=text],.modal textarea,.modal select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--serif);font-size:14px;background:var(--surface-alt);color:var(--ink);resize:vertical;}
-  .modal textarea{min-height:56px;}
+  .modal textarea{min-height:60px; overflow-y:hidden; resize:none;}
   .modal textarea.mono{font-family:var(--mono);font-size:12px;}
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
   .btn{font-family:var(--mono);font-size:11.5px;font-weight:600;padding:8px 14px;border-radius:999px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);cursor:pointer;}
@@ -274,7 +274,7 @@
   .ex-edit.dragover{border-color:var(--coral);border-style:dashed;background:var(--coral-bg);}
   .ex-edit-head{display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
   .ex-edit-head .exdel{border:none;background:none;color:var(--coral);cursor:pointer;font-size:12px;padding:2px 6px;}
-  .ex-edit textarea{width:100%;min-height:52px;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--serif);font-size:14px;background:var(--surface);color:var(--ink);resize:vertical;}
+  .ex-edit textarea{width:100%;min-height:52px;padding:8px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--serif);font-size:14px;background:var(--surface);color:var(--ink);resize:none;overflow-y:hidden;}
   .ex-edit-imgs{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px;align-items:center;}
   .ex-edit-imgs .img-thumb{width:54px;height:54px;}
   .ex-add-img{font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);background:none;border:1px dashed var(--border-strong);border-radius:8px;padding:6px 10px;cursor:pointer;}
@@ -1120,6 +1120,11 @@ function showModal(html){
   overlay.onclick=e=>{ if(e.target.id==='overlay'||e.target.closest("[data-action='close-modal']")) closeModal(); };
   // 绑定分数按钮
   overlay.querySelectorAll('.frac-btn').forEach(btn=>{ btn.onclick=()=>insertFraction(btn.dataset.target); });
+  // 编辑框自动增高
+  overlay.querySelectorAll('textarea').forEach(ta=>{
+    ta.addEventListener('input', ()=>{ ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; });
+    ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px';
+  });
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('show'); pendingImages=[]; pendingExamples=[]; }
 document.addEventListener('dragover',e=>{ if(e.target.closest('.overlay.show')) e.preventDefault(); });
@@ -1173,6 +1178,11 @@ function openPointModal(catId,grpId,editId){
         </div>
       </div>`).join('')||'<div class="empty" style="padding:8px 0">暂无例题</div>';
     wrap.querySelectorAll('[data-extext]').forEach(ta=>{ ta.oninput=()=>{ pendingExamples[Number(ta.dataset.extext)].text=ta.value; }; });
+    // 例题编辑框自动增高
+    wrap.querySelectorAll('textarea').forEach(ta=>{
+      ta.addEventListener('input', ()=>{ ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; });
+      ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px';
+    });
     wrap.querySelectorAll('[data-exdel]').forEach(btn=>{ btn.onclick=()=>{ pendingExamples.splice(Number(btn.dataset.exdel),1); renderExList(); }; });
     wrap.querySelectorAll('[data-eximgdel]').forEach(btn=>{ btn.onclick=()=>{ const[ei,ii]=btn.dataset.eximgdel.split(':').map(Number); pendingExamples[ei].images.splice(ii,1); renderExList(); }; });
     wrap.querySelectorAll('[data-eximgadd]').forEach(btn=>{ btn.onclick=()=>{ exImgTarget=Number(btn.dataset.eximgadd); exImgInput.click(); }; });

@@ -41,3 +41,4 @@
 - 薄荷绿主题最终三色方案：accent #81B77B（鼠尾草绿 Basil Dew），tip-bg #E5F7A9（浅黄绿 Glass Lime），新增 --accent-hover #C7F7FF（浅青蓝 Soda Bubble）。12 个 hover 规则从 color:var(--accent) 改为 color:var(--accent-hover)，形成「常态鼠尾草绿 → 悬停浅青蓝 → 提示框浅黄绿」三色层次。:root 定义 --accent-hover:var(--accent) 确保文艺粉皮肤悬停行为不变
 - 薄荷绿皮肤回归青苹果绿方案：accent 回到 #73AE52，accent-hover 与 accent 同色 #73AE52（悬停不再变色），tip-bg 改为同色系浅绿 #D8ECCE（一定要浅）。派生变量 --accent-soft:#E2F1DA、--tip:#73AE52、--coral:#73AE52、--coral-bg:#E2F1DA
 - 调整薄荷绿主题 tip-bg 为浅色渐变：linear-gradient(135deg, #F3FAF8 → #C9E6E2)，替代之前的纯色/旧渐变方案。卡片操作按钮蓝色 #5D9BEC 保持不变
+- 编辑框改为自动增高：所有 textarea（公式内容、要点、Tips、例题内容、错题内容等）监听 input 事件自动调整高度（height=auto → height=scrollHeight），去掉内部滚动条（overflow-y:hidden + resize:none），设置 min-height 避免空框过矮。showModal() 和 renderExList() 两处均触发初始高度计算
