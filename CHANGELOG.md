@@ -45,4 +45,5 @@
 - 修正薄荷绿主题 tip-bg 渐变颜色与方向：linear-gradient(135deg, #91C1B9 → #DEF0ED)，左深右浅
 - 薄荷绿主题改回纯色：accent #9CC8C1（中调青绿），tip-bg #D6EEF2（浅蓝绿），accent-hover #C7F7FF（浅青蓝），清理所有渐变残留
 - 补齐数量关系工具浏览页头装饰分隔线
-- 统一板块大标题字体为无衬线黑体：新增 --sans 变量（PingFang SC / Hiragino Sans GB / Microsoft YaHei），.group-head h2 从 var(--serif) 改为 var(--sans)，weight 800→700，与浏览页头视觉统一：pk-waveline（repeating-linear-gradient + var(--accent-soft)），速查索引和浏览页两处均添加，颜色自动跟随主题变量
+- 统一板块大标题字体为无衬线黑体
+- 统一悬停色与 accent 一致：薄荷绿 --accent-hover 从 #C7F7FF 改为 #9CC8C1，hover 和 scroll-active 颜色统一：新增 --sans 变量（PingFang SC / Hiragino Sans GB / Microsoft YaHei），.group-head h2 从 var(--serif) 改为 var(--sans)，weight 800→700，与浏览页头视觉统一：pk-waveline（repeating-linear-gradient + var(--accent-soft)），速查索引和浏览页两处均添加，颜色自动跟随主题变量
