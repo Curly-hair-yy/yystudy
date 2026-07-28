@@ -18,7 +18,8 @@ tool-translate.html ← 翻译推理知识点（根目录）
 tool-quant.html     ← 数量关系·知识点（根目录）
 tools/
   tool-memory.html  ← 资料分析·小分互换记忆卡
-  tool-blocks.html  ← 图推·电子积木沙盒
+  tool-blocks.html  ← 图推·电子积木沙盒（Three.js，见下方专门章节）
+  vendor/three/     ← 本地 vendor 的 Three.js r160 + OrbitControls,tool-blocks.html 专用,不要改回 CDN
 fonts/
   ELEYANG-Soft-Bold.ttf  ← 工具内用作徽章/印章字体
   新海山峦.ttf
@@ -197,6 +198,8 @@ JS 常量：`HL_COLORS = ['mint','rose','cream','khaki','blue']`（tool-translat
 
 8. **`hidden` 属性会覆盖 CSS 显示规则**：tool-translate.html 的高亮/下划线悬浮面板（`.mark-popover`）长期不出现，排查了几次都只看 `:hover`/`opacity`/`.open` 这套 CSS，没发现问题——真正原因是面板的 HTML 上还留着 `hidden=""` 属性，浏览器对 `[hidden]` 元素默认套用 `display:none`，而 `display:none` 的元素不管 opacity/visibility/class 怎么变都不会显示，JS 的 toggle 逻辑（`toggleMarkPopover`/`closeMarkPopovers`）也从来没碰过这个属性。**以后排查"悬浮面板/弹出层死活不出现"类问题，第一步应该是在 Elements 面板检查元素本身有没有 `hidden` 属性或内联 `display:none`，而不是一上来就扎进 hover/opacity 相关的 CSS 规则里找**。
 
+9. **不要硬编码 CDN 地址且无 fallback，尤其是 `<script type="module">` + importmap 这种"全有全无"的加载方式**：tool-blocks.html 用户反馈"根本不能用"，本地实测（点击加减方块、拖拽转视角、移动/旋转零件、改色、撤销重做等）却全部正常——因为测试环境能正常访问 `cdn.jsdelivr.net`，而用户的网络环境访问不了。importmap 引入 three.js/OrbitControls 时若 CDN 不可达，整个 module script 会静默完全不执行，所有按钮在 DOM 里都在、看起来正常，但点击零响应，且控制台/页面都不会有任何提示,与用户反馈的"根本不能用"完全吻合。**以后排查"我这边测试都正常,但用户说完全用不了"类反馈，要优先怀疑外部资源加载类问题（CDN、字体、第三方脚本），而不是假设自己复现失败就说明没问题——测试环境的网络可达性不能代表用户的网络环境**。已将 three.js 相关文件 vendor 到 `tools/vendor/three/`，移除运行时 CDN 依赖，其余工具目前都没有类似的运行时 CDN 依赖（Google Fonts 走的是渐进增强，加载失败只是字体降级不影响功能，风险等级不同）。
+
 ## 小索引滚动高亮功能
 
 四个工具都实现了左侧 sticky 迷你索引的滚动同步高亮，逻辑统一：
@@ -231,6 +234,20 @@ JS 常量：`HL_COLORS = ['mint','rose','cream','khaki','blue']`（tool-translat
 - 高亮面板相关 class：`#hlRailWrap` / `.hl-flyout` / `.hl-color-dot` / `.hl-style-btn` / `.pk-open`
 - 小索引滚动高亮 class：`.mi-item.active`
 - **禁止**让高亮面板的 hover 触发区域（`#hlRailWrap`）延伸到 mini-index 区域（之前 `padding-right:220px` 导致重叠误触发，已修复为移除 padding）
+
+## 电子积木沙盒 (`tools/tool-blocks.html`)
+
+图推板块的独立小工具（导航入口 `id: 'blocks', label: '图推·积木'`），基于 Three.js 搭建 5×5×5 编辑区 + 10×10×10 主场景的立体积木沙盒，用于图形推理题的空间还原练习。与 notebook/graphic/translate/quant 四个主力工具完全独立，不共享富文本标记系统，也未接入 Supabase 云同步。
+
+- **本地 vendor 依赖，禁止改回 CDN**：Three.js r160（压缩版）与 `OrbitControls.js` 已下载到 `tools/vendor/three/`，页面顶部 importmap 指向本地相对路径（`./vendor/three/...`），不再从 `cdn.jsdelivr.net` 加载。这是修复"根本不能用"反馈的根因——importmap 原先硬编码 CDN 地址，一旦该域名在用户网络下不可达，`<script type="module">` 会静默整体加载失败，页面按钮全部可见但零响应，且没有任何报错提示。以后升级 three.js 版本也要下载覆盖 `tools/vendor/three/` 里的文件，不要图省事改回 CDN 链接。
+- 三种编辑模式：选零件（点击加减方块/框选主场景零件）、改整块（点方块整体刷色）、改单面（点单个面刷色，`FACE_ORDER`/`hit.face.materialIndex` 对应贴图顺序）。
+- 撤销/重做用整体快照方案（`serialize()`/`restore()`，非增量 diff），最多 100 步。`restore(json, keepSelId)` 第二个参数用于撤销/重做后尽量保留原来选中的零件（若该零件仍存在），避免每次撤销都要重新点选零件才能移动/旋转。
+- **作品保存/读取**（IndexedDB，数据库 `yystudy_blocks_db`，表 `works`，`keyPath: 'id'`）：
+  - 记录字段：`{ id, name, thumb(240px 宽 JPEG dataURL), data(即 serialize() 的 JSON 字符串), createdAt, updatedAt }`。
+  - 主场景顶部「💾 保存作品」按钮：首次保存需输入作品名并直接新建；已加载某作品后再次保存会弹出「覆盖保存」（更新原记录，id 不变）和「另存为」（新建记录，`currentWorkId` 切到新 id）两个选项。保存按钮点击后禁用+显示"保存中…"，完成或失败后恢复，防止重复提交。
+  - 「📂 我的作品」按钮弹出列表（缩略图 + 名称 + 保存时间），每条支持「加载编辑」「预览」「删除」。「预览」进入只读模式（`viewOnly` 标志），顶部出现黄色横幅，编辑区点击/完成零件/撤销重做/清空场景/移动旋转删除零件等所有写操作在对应函数入口处直接 `return`，横幅「退出预览」按钮解锁。
+  - 全局 keydown 监听已加防护：焦点在 `INPUT`/`TEXTAREA`/`contenteditable` 内时不再触发方向键移动零件或图层切换（新增作品名输入框后必须有这层防护，否则输入名字时方向键会被劫持去移动零件）；`Escape` 优先关闭弹窗。
+  - 云同步：该工具尚未接入 Supabase，作品数据目前仅本地 IndexedDB 持久化；后续如需跨设备同步可参考 `cloud-localstorage-sync.js`/`storage-polyfill.js` 的模式另行接入。
 
 ## 数据文件
 

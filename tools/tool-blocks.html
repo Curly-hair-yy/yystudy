@@ -95,12 +95,57 @@
   .ctl:hover { background: #e8edf5; }
   .ctl:disabled { opacity: 0.35; cursor: default; }
   #delPieceBtn { color: #c0392b; }
+
+  /* ---------- 作品名标签 ---------- */
+  #currentWorkLabel { font-size: 12px; color: #8a93a3; white-space: nowrap; }
+
+  /* ---------- 只读预览横幅 ---------- */
+  #viewBanner {
+    position: absolute; left: 0; right: 0; top: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 7px; background: #fff3cd; border-bottom: 1px solid #ffe08a;
+    font-size: 12px; color: #7a5b00;
+  }
+  #viewBanner.modal-hidden { display: none; }
+  #viewBanner button { border: 1px solid #e6c568; background: #fffaf0; border-radius: 7px; padding: 3px 10px; font-size: 12px; cursor: pointer; color: #7a5b00; }
+
+  /* ---------- 弹窗 ---------- */
+  .modalOverlay {
+    position: fixed; inset: 0; background: rgba(20,24,32,0.4);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modalOverlay.modal-hidden { display: none; }
+  .modalBox {
+    background: #fff; border-radius: 14px; padding: 18px 20px;
+    width: 380px; max-width: 90vw; max-height: 80vh; overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+  }
+  .modalBox h3 { font-size: 15px; margin-bottom: 12px; }
+  .modalRow { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+  .modalBtn {
+    border: 1px solid #c7cfdb; background: #f4f6f9; border-radius: 8px;
+    padding: 7px 14px; font-size: 13px; cursor: pointer; color: #333;
+  }
+  .modalBtn.primary { background: #2a9d8f; color: #fff; border-color: #2a9d8f; }
+  .modalBtn.danger { color: #c0392b; }
+  .modalBtn:disabled { opacity: 0.5; cursor: default; }
+  #saveNameInput {
+    width: 100%; box-sizing: border-box; padding: 8px 10px;
+    border: 1px solid #c7cfdb; border-radius: 8px; font-size: 14px;
+  }
+  .workItem { display: flex; gap: 10px; align-items: center; padding: 8px 4px; border-bottom: 1px solid #eef1f5; }
+  .workItem img, .wi-thumb-placeholder { width: 64px; height: 48px; object-fit: cover; border-radius: 6px; background: #eef1f5; flex: 0 0 auto; }
+  .workItem .wi-info { flex: 1 1 auto; min-width: 0; }
+  .workItem .wi-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .workItem .wi-time { font-size: 11px; color: #8a93a3; margin-top: 2px; }
+  .workItem .wi-actions { display: flex; gap: 4px; flex-wrap: wrap; flex: 0 0 auto; }
+  .workItem .wi-actions button { font-size: 11px; padding: 4px 8px; }
 </style>
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    "three": "./vendor/three/three.module.min.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
   }
 }
 </script>
@@ -109,6 +154,7 @@
 
 <div id="topbar">
   <h1>电子积木沙盒</h1>
+  <span id="currentWorkLabel"></span>
   <div class="seg" id="modeSeg">
     <button data-mode="select" class="on">选零件</button>
     <button data-mode="block">改整块</button>
@@ -118,6 +164,8 @@
   <button class="tbtn" id="undoBtn" disabled>↩ 撤销</button>
   <button class="tbtn" id="redoBtn" disabled>↪ 重做</button>
   <button class="tbtn" id="shotBtn">📷 截图</button>
+  <button class="tbtn" id="saveWorkBtn">💾 保存作品</button>
+  <button class="tbtn" id="myWorksBtn">📂 我的作品</button>
   <button class="tbtn danger" id="clearBtn">🗑 清空场景</button>
 </div>
 
@@ -147,9 +195,17 @@
     </div>
   </div>
   <div id="mainView">
+    <div id="viewBanner" class="modal-hidden">
+      只读预览:<span id="viewBannerName"></span>
+      <button id="exitViewBtn">退出预览</button>
+    </div>
     <div id="modeTag">模式:选零件</div>
     <div id="axisInset"></div>
   </div>
+</div>
+
+<div id="modalOverlay" class="modalOverlay modal-hidden">
+  <div class="modalBox" id="modalBox"></div>
 </div>
 
 <div id="bottombar">
@@ -197,6 +253,11 @@ let clickMode = 'select';           // select | block | face
 let editorLayer = 0;
 let selectedPieceId = null;
 let pieceCounter = 0;
+
+/* 作品保存/读取状态 */
+let currentWorkId = null;
+let currentWorkName = '';
+let viewOnly = false;                // 只读预览模式:锁定一切编辑操作
 
 /* editorBlocks: key "x,y,z" -> {pos:[x,y,z], baseColor, mesh} */
 const editorBlocks = new Map();
@@ -424,7 +485,7 @@ function serialize() {
     }))
   });
 }
-function restore(json) {
+function restore(json, keepSelId = null) {
   const s = JSON.parse(json);
   // 清编辑区
   for (const b of editorBlocks.values()) eScene.remove(b.mesh);
@@ -441,7 +502,7 @@ function restore(json) {
     p.group.quaternion.fromArray(sp.quaternion);
     pieces.push(p);
   }
-  setSelected(null);
+  setSelected(pieces.some(p => p.id === keepSelId) ? keepSelId : null);
 }
 function pushUndo() {
   undoStack.push(serialize());
@@ -450,20 +511,22 @@ function pushUndo() {
   refreshUndoBtns();
 }
 function doUndo() {
-  if (!undoStack.length) return;
+  if (viewOnly || !undoStack.length) return;
+  const keep = selectedPieceId;
   redoStack.push(serialize());
-  restore(undoStack.pop());
+  restore(undoStack.pop(), keep);
   refreshUndoBtns();
 }
 function doRedo() {
-  if (!redoStack.length) return;
+  if (viewOnly || !redoStack.length) return;
+  const keep = selectedPieceId;
   undoStack.push(serialize());
-  restore(redoStack.pop());
+  restore(redoStack.pop(), keep);
   refreshUndoBtns();
 }
 function refreshUndoBtns() {
-  document.getElementById('undoBtn').disabled = !undoStack.length;
-  document.getElementById('redoBtn').disabled = !redoStack.length;
+  document.getElementById('undoBtn').disabled = viewOnly || !undoStack.length;
+  document.getElementById('redoBtn').disabled = viewOnly || !redoStack.length;
 }
 
 /* ================= 编辑区操作 ================= */
@@ -495,6 +558,7 @@ function editorRaycast(e) {
   return null;
 }
 function onEditorClick(e) {
+  if (viewOnly) return;
   const hit = editorRaycast(e);
   if (!hit) return;
   if (hit.type === 'cube') {
@@ -518,6 +582,7 @@ eRenderer.domElement.addEventListener('pointermove', e => {
 eRenderer.domElement.addEventListener('pointerleave', () => { ghost.visible = false; });
 
 function finishPiece() {
+  if (viewOnly) return;
   if (!editorBlocks.size) { alert('编辑区还是空的,先点几个方块吧'); return; }
   pushUndo();
   const blocks = [...editorBlocks.values()];
@@ -559,7 +624,7 @@ function onMainClick(e) {
     setSelected(hit ? hit.object.userData.pieceId : null);
     return;
   }
-  if (!hit) return;
+  if (!hit || viewOnly) return;
   const cell = hit.object.userData.cell;
   if (clickMode === 'block') {
     pushUndo();
@@ -590,6 +655,7 @@ function clampAboveFloor(p) {
   if (worldMin < 0) p.group.position.y -= worldMin;
 }
 function movePiece(dx, dy, dz) {
+  if (viewOnly) return;
   const p = pieceById(selectedPieceId);
   if (!p) return;
   pushUndo();
@@ -599,6 +665,7 @@ function movePiece(dx, dy, dz) {
   selectedPieceId = id;
 }
 function rotatePiece(axis, dir) {
+  if (viewOnly) return;
   const p = pieceById(selectedPieceId);
   if (!p) return;
   pushUndo();
@@ -613,6 +680,7 @@ function rotatePiece(axis, dir) {
   clampAboveFloor(p);
 }
 function deletePiece() {
+  if (viewOnly) return;
   const p = pieceById(selectedPieceId);
   if (!p) return;
   pushUndo();
@@ -660,6 +728,7 @@ document.getElementById('modeSeg').querySelectorAll('button').forEach(b => {
 document.getElementById('undoBtn').addEventListener('click', doUndo);
 document.getElementById('redoBtn').addEventListener('click', doRedo);
 document.getElementById('clearBtn').addEventListener('click', () => {
+  if (viewOnly) return;
   if (!pieces.length && !editorBlocks.size) return;
   if (!confirm('清空主场景和编辑区,开始下一题?')) return;
   pushUndo();
@@ -668,6 +737,9 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   for (const b of editorBlocks.values()) eScene.remove(b.mesh);
   editorBlocks.clear();
   setSelected(null);
+  currentWorkId = null;
+  currentWorkName = '';
+  updateWorkLabel();
 });
 document.getElementById('shotBtn').addEventListener('click', () => {
   mRenderer.render(mScene, mCam);
@@ -706,12 +778,230 @@ function refreshPieceList() {
   }
 }
 function refreshCtlState() {
-  const on = !!pieceById(selectedPieceId);
+  const on = !!pieceById(selectedPieceId) && !viewOnly;
   document.querySelectorAll('#moveGroup .ctl, #rotGroup .ctl, #delPieceBtn')
     .forEach(b => b.disabled = !on);
+  document.getElementById('finishBtn').disabled = viewOnly;
+  document.getElementById('clearBtn').disabled = viewOnly;
 }
 refreshPieceList();
 refreshCtlState();
+
+/* ================= 作品保存/读取(IndexedDB) ================= */
+const WORK_DB_NAME = 'yystudy_blocks_db';
+const WORK_STORE = 'works';
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(WORK_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(WORK_STORE)) db.createObjectStore(WORK_STORE, { keyPath: 'id' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbPut(work) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(WORK_STORE, 'readwrite');
+    tx.objectStore(WORK_STORE).put(work);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbGet(id) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(WORK_STORE, 'readonly');
+    const req = tx.objectStore(WORK_STORE).get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbGetAll() {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(WORK_STORE, 'readonly');
+    const req = tx.objectStore(WORK_STORE).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbDelete(id) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(WORK_STORE, 'readwrite');
+    tx.objectStore(WORK_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+function genWorkId() { return 'w_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function formatTime(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function captureThumb() {
+  mRenderer.render(mScene, mCam);
+  const src = mRenderer.domElement;
+  const tw = 240, th = Math.max(1, Math.round(tw * src.height / src.width));
+  const c = document.createElement('canvas');
+  c.width = tw; c.height = th;
+  c.getContext('2d').drawImage(src, 0, 0, tw, th);
+  return c.toDataURL('image/jpeg', 0.6);
+}
+function updateWorkLabel() {
+  document.getElementById('currentWorkLabel').textContent = currentWorkId ? ('· ' + currentWorkName) : '';
+}
+function updateViewBanner() {
+  document.getElementById('viewBanner').classList.toggle('modal-hidden', !viewOnly);
+  document.getElementById('viewBannerName').textContent = currentWorkName;
+  refreshCtlState();
+  refreshUndoBtns();
+}
+
+/* ---------- 通用弹窗 ---------- */
+function closeModal() {
+  document.getElementById('modalOverlay').classList.add('modal-hidden');
+  document.getElementById('modalBox').innerHTML = '';
+  document.getElementById('saveWorkBtn').disabled = false;
+  document.getElementById('myWorksBtn').disabled = false;
+}
+function openModalWithHTML(html) {
+  document.getElementById('modalBox').innerHTML = html;
+  document.getElementById('modalOverlay').classList.remove('modal-hidden');
+}
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target.id === 'modalOverlay') closeModal();
+});
+
+/* ---------- 保存 ---------- */
+function showSaveModal() {
+  if (viewOnly || !document.getElementById('modalOverlay').classList.contains('modal-hidden')) return;
+  if (!pieces.length && !editorBlocks.size) { alert('场景还是空的,先搭点东西吧'); return; }
+  document.getElementById('saveWorkBtn').disabled = true;
+  document.getElementById('myWorksBtn').disabled = true;
+  const hasCurrent = !!currentWorkId;
+  openModalWithHTML(`
+    <h3>保存作品</h3>
+    <input type="text" id="saveNameInput" placeholder="给作品起个名字" maxlength="40" value="${escapeHtml(currentWorkName)}">
+    <div class="modalRow">
+      <button class="modalBtn" id="saveCancelBtn">取消</button>
+      ${hasCurrent ? '<button class="modalBtn" id="saveOverwriteBtn">覆盖保存</button>' : ''}
+      <button class="modalBtn primary" id="saveAsNewBtn">${hasCurrent ? '另存为' : '保存'}</button>
+    </div>
+  `);
+  document.getElementById('saveCancelBtn').addEventListener('click', closeModal);
+  const nameInput = document.getElementById('saveNameInput');
+  nameInput.focus();
+  if (hasCurrent) document.getElementById('saveOverwriteBtn').addEventListener('click', () => doSave(true));
+  document.getElementById('saveAsNewBtn').addEventListener('click', () => doSave(false));
+}
+async function doSave(overwrite) {
+  const nameInput = document.getElementById('saveNameInput');
+  const name = (nameInput.value || '').trim();
+  if (!name) { nameInput.style.borderColor = '#c0392b'; nameInput.focus(); return; }
+  const btn = document.getElementById(overwrite ? 'saveOverwriteBtn' : 'saveAsNewBtn');
+  if (btn.disabled) return;
+  document.querySelectorAll('.modalBtn').forEach(b => b.disabled = true);
+  const originalText = btn.textContent;
+  btn.textContent = '保存中…';
+  try {
+    const now = Date.now();
+    const thumb = captureThumb();
+    const data = serialize();
+    const id = overwrite ? currentWorkId : genWorkId();
+    let createdAt = now;
+    if (overwrite) {
+      const existing = await idbGet(currentWorkId);
+      if (existing) createdAt = existing.createdAt;
+    }
+    await idbPut({ id, name, thumb, data, createdAt, updatedAt: now });
+    currentWorkId = id;
+    currentWorkName = name;
+    updateWorkLabel();
+    closeModal();
+  } catch (err) {
+    alert('保存失败:' + err.message);
+    document.querySelectorAll('.modalBtn').forEach(b => b.disabled = false);
+    btn.textContent = originalText;
+  }
+}
+
+/* ---------- 我的作品 ---------- */
+async function showWorksModal() {
+  if (!document.getElementById('modalOverlay').classList.contains('modal-hidden')) return;
+  document.getElementById('saveWorkBtn').disabled = true;
+  document.getElementById('myWorksBtn').disabled = true;
+  let works;
+  try { works = await idbGetAll(); }
+  catch (err) { alert('读取作品列表失败:' + err.message); document.getElementById('saveWorkBtn').disabled = false; document.getElementById('myWorksBtn').disabled = false; return; }
+  works.sort((a, b) => b.updatedAt - a.updatedAt);
+  renderWorksModal(works);
+}
+function renderWorksModal(works) {
+  const rows = works.length ? works.map(w => `
+    <div class="workItem" data-id="${w.id}">
+      ${w.thumb ? `<img src="${w.thumb}" alt="">` : '<div class="wi-thumb-placeholder"></div>'}
+      <div class="wi-info">
+        <div class="wi-name">${escapeHtml(w.name)}</div>
+        <div class="wi-time">${formatTime(w.updatedAt)}</div>
+      </div>
+      <div class="wi-actions">
+        <button class="modalBtn wi-load">加载编辑</button>
+        <button class="modalBtn wi-preview">预览</button>
+        <button class="modalBtn danger wi-del">删除</button>
+      </div>
+    </div>
+  `).join('') : '<div class="hint" style="padding:20px 0;text-align:center;">还没有保存过作品</div>';
+  openModalWithHTML(`<h3>我的作品</h3><div id="worksListBody">${rows}</div><div class="modalRow"><button class="modalBtn" id="worksCloseBtn">关闭</button></div>`);
+  document.getElementById('worksCloseBtn').addEventListener('click', closeModal);
+  document.querySelectorAll('.workItem').forEach(row => {
+    const id = row.dataset.id;
+    row.querySelector('.wi-load').addEventListener('click', () => loadWork(id, false));
+    row.querySelector('.wi-preview').addEventListener('click', () => loadWork(id, true));
+    row.querySelector('.wi-del').addEventListener('click', () => deleteWorkConfirm(id, row));
+  });
+}
+async function loadWork(id, readOnly) {
+  const msg = readOnly ? '进入只读预览?当前场景未保存的内容会被替换。' : '加载该作品继续编辑?当前场景未保存的内容会被替换。';
+  if (!confirm(msg)) return;
+  let w;
+  try { w = await idbGet(id); }
+  catch (err) { alert('加载失败:' + err.message); return; }
+  if (!w) { alert('作品不存在,可能已被删除'); return; }
+  pushUndo();
+  restore(w.data);
+  currentWorkId = w.id;
+  currentWorkName = w.name;
+  viewOnly = readOnly;
+  updateWorkLabel();
+  updateViewBanner();
+  closeModal();
+}
+async function deleteWorkConfirm(id, rowEl) {
+  if (!confirm('确定删除这个作品吗?此操作不可撤销。')) return;
+  try {
+    await idbDelete(id);
+    if (currentWorkId === id) { currentWorkId = null; currentWorkName = ''; updateWorkLabel(); }
+    rowEl.remove();
+    if (!document.querySelectorAll('.workItem').length) {
+      document.getElementById('worksListBody').innerHTML = '<div class="hint" style="padding:20px 0;text-align:center;">还没有保存过作品</div>';
+    }
+  } catch (err) { alert('删除失败:' + err.message); }
+}
+
+document.getElementById('saveWorkBtn').addEventListener('click', showSaveModal);
+document.getElementById('myWorksBtn').addEventListener('click', showWorksModal);
+document.getElementById('exitViewBtn').addEventListener('click', () => {
+  viewOnly = false;
+  updateViewBanner();
+});
 
 /* ---------- 点击 vs 拖拽 区分 ---------- */
 function addClickHandler(dom, fn) {
@@ -729,7 +1019,7 @@ addClickHandler(mRenderer.domElement, onMainClick);
 /* ---------- 拖拽零件(选零件模式下按住零件直接拖) ---------- */
 let drag = null;
 mRenderer.domElement.addEventListener('pointerdown', e => {
-  if (clickMode !== 'select' || drag || !e.isPrimary) return;
+  if (viewOnly || clickMode !== 'select' || drag || !e.isPrimary) return;
   if (e.pointerType === 'mouse' && e.button !== 0) return; // 右键留给转视角
   const hit = mainHit(e);
   if (!hit) return;
@@ -785,6 +1075,12 @@ document.getElementById('leftPanel').addEventListener('mouseleave', () => hoverE
 
 const ARROWS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 window.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !document.getElementById('modalOverlay').classList.contains('modal-hidden')) {
+    closeModal();
+    return;
+  }
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
     e.preventDefault();
     e.shiftKey ? doRedo() : doUndo();
