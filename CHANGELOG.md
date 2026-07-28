@@ -8,6 +8,7 @@
 - 数据存储方案:参考 tool-notebook.html 图片曾经直接塞 JSON 导致越来越卡的教训,作品数据(含缩略图 dataURL)存入 IndexedDB(`yystudy_blocks_db` / `works` 表),不占用 localStorage;tool-blocks.html 目前未接入 Supabase 云同步,云端同步留作后续可选项
 - "我的作品"列表展示缩略图(主场景渲染帧裁切为 240px 宽 JPEG)、作品名、保存时间,每条支持"加载编辑"(替换当前场景,可继续编辑)、"预览"(只读模式,顶部黄色横幅提示,锁定编辑区点击/完成零件/撤销重做/清空场景/移动/旋转/删除零件等一切写操作,点"退出预览"解锁)、"删除"(确认后从 IndexedDB 移除,若删除的是当前加载作品则清空顶部作品名标签)
 - 全局 keydown 监听增加输入框/Escape 守卫:此前方向键/Ctrl+Z 快捷键不区分事件来源,若焦点在文本输入框(如新增的作品名弹窗)内会被错误拦截、劫持光标移动;现在文本输入焦点下直接放行,Escape 优先关闭弹窗
+- 修复 tool-graphic.html「我的补充/错题本」图片裂图的 bug:图片存储早已迁移到 IndexedDB(`idbPut`/`idbGet`,数据库 `tkimg`),`note.images` 数组存的是 IDB key 而非真实地址,但 `noteCardHtml()` 笔记卡片和复习卡片背面这两处渲染代码仍把 key 直接当 `<img src>` 用,导致裂图;已改为先同步渲染空的 `[data-img-ids]` 占位容器,DOM 挂载后用新增的 `hydrateImgPlaceholders()` 复用已有的 `idbRenderImgs()` 异步解析出真实 dataURL 再填入(同时兼容未迁移的 `data:` 旧数据),并把点击放大灯箱的绑定一并挪到图片真正插入之后,避免灯篮点开也是裂图。顺带修复编辑笔记弹窗里图片预览区(`renderImagePreviews()`)同样直接拿 IDB key 当 src 的裂图问题。已用真实数据（127 条笔记中 107 条带图，含 data: 旧格式与 IDB key 混合）验证：笔记卡片、复习卡片、编辑预览三处均正常显示且可点击放大；另发现少量 IDB key 在当前浏览器里查不到对应数据（大概率是跨设备通过 Supabase 同步了 note 的 JSON 元数据、但 IndexedDB 图片二进制数据不会跨设备同步导致的孤立引用），修复后这类情况优雅地不渲染裂图图标而非报错,该跨设备同步缺口本次未处理,仅记录待后续评估
 
 ## 2026-07-27
 

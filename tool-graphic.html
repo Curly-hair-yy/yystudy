@@ -1321,6 +1321,24 @@ async function idbRenderImgs(ids,cls){
 async function idbRenderNoteImgs(note){
   return note&&note.images&&note.images.length ? `<div class="notes-img-row">${await idbRenderImgs(note.images,'note-img')}</div>` : '';
 }
+/* 图片占位符异步填充：先同步渲染空的 [data-img-ids] 容器，DOM 挂载后再用 idbRenderImgs
+   解析 IndexedDB key（或兼容未迁移的 data: 旧数据）填入真正的 <img>，避免裂图 */
+async function hydrateImgPlaceholders(root, selector, cls, onImgClick){
+  const containers = (root||document).querySelectorAll(selector);
+  for(const box of containers){
+    if(box.dataset.hydrated) continue;
+    box.dataset.hydrated = '1';
+    let ids;
+    try{ ids = JSON.parse(decodeURIComponent(box.dataset.imgIds||'[]')); }catch(e){ ids=[]; }
+    if(!ids.length) continue;
+    box.innerHTML = await idbRenderImgs(ids, cls);
+    box.querySelectorAll('img').forEach(img=>{
+      img.loading = 'lazy';
+      img.alt = '补充图片';
+      if(onImgClick) img.onclick = (e)=>onImgClick(e, img, box);
+    });
+  }
+}
 
 async function loadNotes(){
   const localNotes = loadLocalNotes();
@@ -1421,8 +1439,13 @@ function resizeImageFile(file, maxDim=1000, quality=0.75){
 function renderImagePreviews(){
   const wrap = document.getElementById('fImagePreviewWrap');
   wrap.innerHTML = pendingImages.map((src,i)=>
-    `<div class="img-preview-item"><img src="${src}" alt="预览图${i+1}"><button type="button" class="rm" data-idx="${i}" title="移除">×</button></div>`
+    `<div class="img-preview-item"><img data-idx="${i}" alt="预览图${i+1}"><button type="button" class="rm" data-idx="${i}" title="移除">×</button></div>`
   ).join('');
+  // pendingImages 里既有本次新选的 data: URL，也有编辑已有笔记时带过来的 IDB key，需异步解析
+  wrap.querySelectorAll('img[data-idx]').forEach(img=>{
+    const idx = Number(img.dataset.idx);
+    idbRenderImg(pendingImages[idx]).then(resolved=>{ if(resolved) img.src = resolved; });
+  });
 }
 function showToast(msg){
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
@@ -1533,11 +1556,12 @@ function formatTs(ts){
 }
 function noteCardHtml(key, n){
   const linkedKeys = n.topicKeys && n.topicKeys.length ? n.topicKeys : findNoteKeys(n.id);
+  const imgIds = getNoteImages(n);
   return `<div class="note-card ${n.wrongBook?'wrong':''}">
     <div class="txt">
       ${n.wrongBook?'<span class="wrongtag">错题</span>':''}${n.title?`<b>${esc(n.title)}</b>`:''}${n.ts?`<span class="note-date">${formatTs(n.ts)}</span>`:''}
       ${linkedKeys.length ? `<div class="note-links">${linkedKeys.map(k=>`<span class="note-link">${esc(topicLabelFromKey(k))}</span>`).join('')}</div>` : ''}
-      ${getNoteImages(n).map(src=>`<img src="${src}" class="note-img" alt="补充图片" data-note-id="${n.id}" loading="lazy">`).join('')}
+      ${imgIds.length ? `<div class="notes-img-row" data-img-ids="${encodeURIComponent(JSON.stringify(imgIds))}" data-note-id="${n.id}"></div>` : ''}
       ${esc(n.content)}
     </div>
     <div class="note-actions">
@@ -1861,9 +1885,9 @@ function bindTopicActions(el){
     updateNoteEverywhere(b.dataset.id, { wrongBook:false });
     await saveNotes(); showToast('已移出错题本'); renderAll();
   });
-  el.querySelectorAll('.note-img').forEach(img=>img.onclick=(e)=>{
+  hydrateImgPlaceholders(el, '.notes-img-row[data-img-ids]', 'note-img', (e, img, box)=>{
     e.stopPropagation();
-    const n = findNoteById(img.dataset.noteId);
+    const n = findNoteById(box.dataset.noteId);
     openLightbox(img.src, n ? n.title : '', n ? n.content : '');
   });
 }
@@ -2175,7 +2199,7 @@ function renderCardsView(){
           </div>
           <div class="face back">
             <span class="backtitle">${c.wrongBook?'<span class="wrongtag">错题</span>':''}${esc(c.moduleName)} · ${esc(c.groupName)}</span>
-            ${(c.images||[]).map(src=>`<img src="${src}" class="card-note-img" alt="补充图片">`).join('')}
+            ${c.images && c.images.length ? `<div class="card-note-imgs" data-img-ids="${encodeURIComponent(JSON.stringify(c.images))}"></div>` : ''}
             ${miniTreeBack(c)}
             ${c.tips.length ? `<div class="tips"><b>思维拓展</b><ul>${c.tips.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
           </div>
@@ -2191,7 +2215,7 @@ function renderCardsView(){
       </div>
     </div>`;
   bindCardControls(el);
-  el.querySelectorAll('.card-note-img').forEach(img=>img.onclick=(e)=>{
+  hydrateImgPlaceholders(el, '.card-note-imgs[data-img-ids]', 'card-note-img', (e, img)=>{
     e.stopPropagation();
     openLightbox(img.src, `${c.moduleName} · ${c.groupName}`, '');
   });
