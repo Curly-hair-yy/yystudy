@@ -48,7 +48,7 @@ data/
 - `tool-notebook.html` — 使用 `storage-polyfill.js`（Supabase 云端同步）
 - `tool-graphic.html` — 使用 `cloud-localstorage-sync.js`（Supabase 云端同步）
 - `tool-translate.html` — 使用 `cloud-localstorage-sync.js`（Supabase 云端同步）
-- `tool-quant.html` — **仅 localStorage，尚未接入 Supabase**（`STORE_KEY = 'quant_data'`，数据从 `data/quant-data.json` 首次加载后存入 localStorage）
+- `tool-quant.html` — 使用 `cloud-localstorage-sync.js`（Supabase 云端同步，2026-07-29 接入；`STORE_KEY = 'quant_data'`，数据从 `data/quant-data.json` 首次加载后存入 localStorage）
 
 ### 工具页设计约定
 
