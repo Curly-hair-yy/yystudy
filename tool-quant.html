@@ -907,6 +907,45 @@ function shapeIcon(name){
 
 /* 渲染图形公式：含周长/面积列的→表格；普通→图标行列表；否则→纯文本 */
 function renderShapeFormula(formula){
+  // 纯网格表格（如平方数表：1²=1|2²=4|...||...，无冒号键值对）要最先判断——
+  // 下面的"名称：值"早退逻辑要求出现冒号，纯网格公式没有冒号会被提前拦截，永远走不到后面的网格判断
+  if(formula.includes('||')&&!/[：:]/.test(formula)){
+    const gridRows=formula.split('||').map(r=>r.trim()).filter(Boolean);
+    const cells=gridRows.map(r=>r.split('|').map(c=>c.trim()).filter(Boolean));
+    const maxCols=Math.max(...cells.map(r=>r.length));
+    if(cells.length>=2&&maxCols>=3){
+      return `<table class="formula-table formula-grid"><tbody>${cells.map(row=>`<tr>${row.map(c=>`<td class="ft-formula">${fracRender(c)}</td>`).join('')}${'<td></td>'.repeat(Math.max(0,maxCols-row.length))}</tr>`).join('')}</tbody></table>`;
+    }
+  }
+  // 检测 || 分隔的多组对照表（如等差 vs 等比对照：项目：等差数列；通项公式：...；求和公式：...||项目：等比数列；...）
+  // 必须在下面的"整体按分号拆分"之前判断——否则 || 两侧的内容会被同一次全局分号拆分揉到一起，
+  // 导致相邻两组的表头/表尾粘连（形如"...ا~i~||项目：等比数列"），走错到通用2列对照表分支
+  if(formula.includes('||')){
+    const groups=formula.split('||').map(g=>g.trim()).filter(Boolean);
+    if(groups.length>=2){
+      const groupTables=groups.map(grp=>{
+        const gparts=grp.split(/[；;]/).map(s=>s.trim()).filter(Boolean);
+        const gRows=[];
+        for(const gp of gparts){
+          const colon=gp.match(/[：:]/);
+          if(!colon) continue;
+          gRows.push({name:gp.slice(0,colon.index).trim(), val:gp.slice(colon.index+1).trim()});
+        }
+        if(gRows.length<2) return null;
+        const gh=gRows[0];
+        return {header:gh, data:gRows.slice(1)};
+      }).filter(Boolean);
+      if(groupTables.length>=2){
+        // 构建多组对照表：每组一个表头+子行，垂直堆叠
+        return `<div class="formula-table-group">${groupTables.map(gt=>`
+          <table class="formula-table">
+            <thead><tr><th>${esc(gt.header.name)}</th><th>${esc(gt.header.val)}</th></tr></thead>
+            <tbody>${gt.data.map(r=>`<tr><td class="ft-shape" style="font-weight:700">${esc(r.name)}</td><td class="ft-formula">${fracRender(r.val)}</td></tr>`).join('')}</tbody>
+          </table>`).join('')}</div>`;
+      }
+    }
+  }
+
   if(!/[一-鿿]{2,4}[：:]/.test(formula)) return fracRender(formula);
   const parts=formula.split(/[；;]/).map(s=>s.trim()).filter(Boolean);
   if(parts.length<2) return fracRender(formula);
@@ -960,42 +999,6 @@ function renderShapeFormula(formula){
     const headerHtml=isHeader?`<thead><tr><th>${esc(h1)}</th><th>${esc(h2)}</th></tr></thead>`:'';
     return `<table class="formula-table">${headerHtml}
       <tbody>${dataRows.map(r=>`<tr><td class="ft-shape" style="font-weight:700;white-space:nowrap;">${esc(r.name)}</td><td class="ft-formula">${fracRender(r.val)}</td></tr>`).join('')}</tbody></table>`;
-  }
-
-  // 检测 || 分隔的纯网格表格（如平方数表：1²=1|2²=4|...||...，无冒号键值对）
-  if(formula.includes('||')&&!formula.includes('：')){
-    const gridRows=formula.split('||').map(r=>r.trim()).filter(Boolean);
-    const cells=gridRows.map(r=>r.split('|').map(c=>c.trim()).filter(Boolean));
-    const maxCols=Math.max(...cells.map(r=>r.length));
-    if(cells.length>=2&&maxCols>=3){
-      return `<table class="formula-table formula-grid"><tbody>${cells.map(row=>`<tr>${row.map(c=>`<td class="ft-formula">${fracRender(c)}</td>`).join('')}${'<td></td>'.repeat(Math.max(0,maxCols-row.length))}</tr>`).join('')}</tbody></table>`;
-    }
-  }
-  // 检测 || 分隔的多组对照表（如等差 vs 等比对照：项目：通项公式；等差：...；等比：...||项目：求和公式；...）
-  if(formula.includes('||')){
-    const groups=formula.split('||').map(g=>g.trim()).filter(Boolean);
-    if(groups.length>=2){
-      const groupTables=groups.map(grp=>{
-        const gparts=grp.split(/[；;]/).map(s=>s.trim()).filter(Boolean);
-        const gRows=[];
-        for(const gp of gparts){
-          const colon=gp.match(/[：:]/);
-          if(!colon) continue;
-          gRows.push({name:gp.slice(0,colon.index).trim(), val:gp.slice(colon.index+1).trim()});
-        }
-        if(gRows.length<2) return null;
-        const gh=gRows[0];
-        return {header:gh, data:gRows.slice(1)};
-      }).filter(Boolean);
-      if(groupTables.length>=2){
-        // 构建多组对照表：每组一个表头+子行，垂直堆叠
-        return `<div class="formula-table-group">${groupTables.map(gt=>`
-          <table class="formula-table">
-            <thead><tr><th>${esc(gt.header.name)}</th><th>${esc(gt.header.val)}</th></tr></thead>
-            <tbody>${gt.data.map(r=>`<tr><td class="ft-shape" style="font-weight:700">${esc(r.name)}</td><td class="ft-formula">${fracRender(r.val)}</td></tr>`).join('')}</tbody>
-          </table>`).join('')}</div>`;
-      }
-    }
   }
 
   // 否则→图标行列表
