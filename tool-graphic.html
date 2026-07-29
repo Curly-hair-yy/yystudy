@@ -1244,8 +1244,9 @@ const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 // 说明：图推的笔记数据可能很大（带截图），如果整份一起同步，单次请求容易超过接口的大小限制。
 // 所以这里按模块（notes 对象的每个顶层 key）拆开，一个模块一个请求，互不影响。
 
-/* ============ IndexedDB 图片存储 ============ */
+/* ============ IndexedDB 图片存储（+ Supabase 云端同步） ============ */
 const IDB_NAME='tkimg', IDB_STORE='imgs';
+const IMG_CHUNK_PREFIX = 'tuitui-img__';
 function idbOpen(){
   return new Promise((res,rej)=>{
     const r=indexedDB.open(IDB_NAME,1);
@@ -1253,21 +1254,56 @@ function idbOpen(){
     r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
   });
 }
-async function idbPut(id,dataUrl){
-  const db=await idbOpen();
-  return new Promise((res,rej)=>{
+function idbPutLocal(id,dataUrl){
+  return idbOpen().then(db=>new Promise((res,rej)=>{
     const tx=db.transaction(IDB_STORE,'readwrite');
     tx.objectStore(IDB_STORE).put(dataUrl,id);
     tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);
-  });
+  }));
 }
+/* 图片本身可能几十到上百 KB，多张图片一起处理时不做互相等待/互相阻塞：
+   上传失败只 console.warn，不影响本地已经写入成功的这一张，也不影响其它图片 */
+async function cloudPutImage(id,dataUrl){
+  try{
+    await fetch(SUPA_URL + '/rest/v1/app_data?on_conflict=tool_name,data_key', {
+      method: 'POST',
+      headers: {
+        apikey: SUPA_KEY,
+        Authorization: 'Bearer ' + SUPA_KEY,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify([{ tool_name:'graphic', data_key: IMG_CHUNK_PREFIX + id, data_value: dataUrl, updated_at: new Date().toISOString() }])
+    });
+  }catch(e){ console.warn('[graphic-img-sync] 图片上传失败：', id, e); }
+}
+async function cloudGetImage(id){
+  try{
+    const url = SUPA_URL + '/rest/v1/app_data?tool_name=eq.graphic&data_key=eq.' + encodeURIComponent(IMG_CHUNK_PREFIX + id) + '&select=data_value';
+    const res = await fetch(url, { headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + SUPA_KEY } });
+    if(!res.ok) return null;
+    const rows = await res.json();
+    return rows.length ? rows[0].data_value : null;
+  }catch(e){ console.warn('[graphic-img-sync] 图片下载失败：', id, e); return null; }
+}
+/* 写入：先落本地 IndexedDB（await，调用方要立刻能用），云端上传后台异步不等待，不阻塞 UI */
+async function idbPut(id,dataUrl){
+  await idbPutLocal(id,dataUrl);
+  cloudPutImage(id,dataUrl);
+}
+/* 读取：本地有直接用；本地没有（大概率是别的设备加的图，本机 IndexedDB 从没存过）
+   就去 Supabase 按 id 查一次，查到后写回本地缓存（走 idbPutLocal，不重复上传） */
 async function idbGet(id){
   const db=await idbOpen();
-  return new Promise((res,rej)=>{
+  const local = await new Promise((res,rej)=>{
     const tx=db.transaction(IDB_STORE,'readonly');
     const r=tx.objectStore(IDB_STORE).get(id);
     r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
   });
+  if(local) return local;
+  const remote = await cloudGetImage(id);
+  if(remote){ idbPutLocal(id,remote).catch(e=>console.warn('[graphic-img-sync] 图片缓存写入本地失败：', id, e)); return remote; }
+  return undefined;
 }
 async function idbDel(id){
   const db=await idbOpen();
