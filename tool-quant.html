@@ -819,6 +819,51 @@ function doRedo(){
 async function saveData(){
   try{ localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); }catch(e){}
 }
+/* 定向内容补丁：修复三个知识点的 formula 字段
+ *   问题：quant-data.json 已修复但 localStorage 缓存着旧版本，且旧缓存可能已通过
+ *   cloud-localstorage-sync.js 同步到其它设备，导致表格不渲染。
+ *   策略：直接比对内容（不用全局迁移标记位，避免标记位被同步到其它设备导致
+ *   死锁 — 参考图推那次「完成标记被错误同步」的教训）。
+ *   仅当 formula 与已知旧版完全一致时才覆盖（说明用户未手动编辑该字段）；
+ *   不一致则跳过（用户可能自己改过，或已是新版）。 */
+function patchFormulaFields(DATA){
+  // 旧版（有问题的）formula 文本 → 新版（quant-data.json 当前正确内容）
+  var PATCHES = [
+    {
+      id: 'p_dengcha_dengbi',
+      old: '项目：通项公式；等差数列：aₙ=a₁+(n-1)d；等比数列：aₙ=a₁×qⁿ⁻¹||项目：求和公式；等差数列：Sₙ=n(a₁+aₙ)[[n(a₁+aₙ)/2]]；等比数列：Sₙ=a₁(1-qⁿ)[[a₁(1-qⁿ)/(1-q)]]||项目：中项性质；等差数列：若m+n=k+i，则aₘ+aₙ=aₖ+aᵢ；等比数列：若m+n=k+i，则aₘ·aₙ=aₖ·aᵢ',
+      'new': '项目：等差数列；通项公式：a~1~+(n-1)d；求和公式：n(a~1~+a~n~)/2；中项性质：若m+n=k+i，则a~m~+a~n~=a~k~+a~i~||项目：等比数列；通项公式：a~1~×q^n-1^；求和公式：a~1~(1-q^n^)/(1-q)；中项性质：若m+n=k+i，则a~m~·a~n~=a~k~·a~i~'
+    },
+    {
+      id: 'p_pingfangshu',
+      old: '1²=1|2²=4|3²=9|4²=16|5²=25||6²=36|7²=49|8²=64|9²=81|10²=100||11²=121|12²=144|13²=169|14²=196|15²=225||16²=256|17²=289|18²=324|19²=361|20²=400',
+      'new': '1²=1|2²=4|3²=9|4²=16|5²=25||6²=36|7²=49|8²=64|9²=81|10²=100||11²=121|12²=144|13²=169|14²=196|15²=225||16²=256|17²=289|18²=324|19²=361|20²=400'
+    },
+    {
+      id: 'p_rc_daigongshi',
+      old: '总人数－圈外部分＝总人次－重复部分；　0次+1次+2次+3次＝总人数',
+      'new': '项目：两个圈；文字表达：总人数-都不满足人数=两圈人数之和-都满足人数；公式：总-两不=A+B-AB||项目：三个圈；文字表达：总人数-都不满足人数=三圈人数之和-只满足两项人数-2×都满足人数；公式：总-三不=A+B+C-AB-AC-BC+ABC'
+    }
+  ];
+  var changed = false;
+  var patchMap = {};
+  PATCHES.forEach(function(p){ patchMap[p.id] = p; });
+  DATA.categories.forEach(function(c){
+    c.groups.forEach(function(g){
+      g.points.forEach(function(p){
+        var patch = patchMap[p.id];
+        if (!patch) return;
+        if (typeof p.formula === 'string' && p.formula === patch.old){
+          p.formula = patch['new'];
+          changed = true;
+        }
+        // 内容不一致 → 用户可能手动编辑过，或已是新版，跳过不覆盖
+      });
+    });
+  });
+  return changed;
+}
+
 async function loadData(){
   let loaded=false;
   try{
@@ -844,6 +889,8 @@ async function loadData(){
   if(!DATA.mistakes) DATA.mistakes=[];
   // 富文本字段迁移：把字符串（含可能损坏/未闭合的旧版 {{type:color|...}} 标记语法）转成 {text,marks}，只需迁移一次
   if(migrateAllRichText(DATA)){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} }
+  // 定向补丁：修复三个知识点 formula 字段的旧缓存（仅当内容与已知旧版完全一致时才覆盖）
+  if(patchFormulaFields(DATA)){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(DATA)); }catch(e){} }
   if(DATA.categories.length&&!DATA.categories.find(c=>c.id===UI.activeCat)) UI.activeCat=DATA.categories[0].id;
   // 恢复字号
   let savedFont=1;
