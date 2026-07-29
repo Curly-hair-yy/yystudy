@@ -1291,15 +1291,17 @@ async function idbPut(id,dataUrl){
   await idbPutLocal(id,dataUrl);
   cloudPutImage(id,dataUrl);
 }
-/* 读取：本地有直接用；本地没有（大概率是别的设备加的图，本机 IndexedDB 从没存过）
-   就去 Supabase 按 id 查一次，查到后写回本地缓存（走 idbPutLocal，不重复上传） */
-async function idbGet(id){
-  const db=await idbOpen();
-  const local = await new Promise((res,rej)=>{
+function idbGetLocal(id){
+  return idbOpen().then(db=>new Promise((res,rej)=>{
     const tx=db.transaction(IDB_STORE,'readonly');
     const r=tx.objectStore(IDB_STORE).get(id);
     r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
-  });
+  }));
+}
+/* 读取：本地有直接用；本地没有（大概率是别的设备加的图，本机 IndexedDB 从没存过）
+   就去 Supabase 按 id 查一次，查到后写回本地缓存（走 idbPutLocal，不重复上传） */
+async function idbGet(id){
+  const local = await idbGetLocal(id);
   if(local) return local;
   const remote = await cloudGetImage(id);
   if(remote){ idbPutLocal(id,remote).catch(e=>console.warn('[graphic-img-sync] 图片缓存写入本地失败：', id, e)); return remote; }
@@ -1333,6 +1335,31 @@ async function migrateImagesToIDB(){
   }
   if(migrated>0){ saveLocalNotes(); }
   try{ localStorage.setItem(IDB_MIGRATED_KEY,'1'); }catch(e){}
+}
+/* 一次性补传：早于"idbPut 自动同步云端"这个修复之前，就已经迁移到 IndexedDB 的老图片
+   从来没有上传过 Supabase，导致这些图片依然是本机独有、换设备/换浏览器看不到。
+   用独立的标记位（不复用 IDB_MIGRATED_KEY，避免和上面的 base64→IDB 迁移逻辑打架），
+   扫描一遍 state.notes 里所有 note.images（复习卡片的图片就是同一份数据，不用另外扫），
+   凡是 IDB key（不是 data: 开头）且本机 IndexedDB 里确实存在的，都补传一次。
+   不阻塞 UI：函数本身不 await 网络请求，扫描完成后台异步执行，单张失败只 console.warn，
+   不影响其它张，全部处理完（不论成功失败）才落标记位，避免半途中断导致下次再也不重试 */
+const IDB_CLOUD_BACKFILL_KEY='tkimg_cloud_backfilled';
+function backfillImagesToCloud(){
+  if(localStorage.getItem(IDB_CLOUD_BACKFILL_KEY)) return;
+  const ids=new Set();
+  Object.keys(state.notes).forEach(key=>{
+    (state.notes[key]||[]).forEach(n=>{
+      (n.images||[]).forEach(src=>{
+        if(typeof src==='string'&&!src.startsWith('data:')) ids.add(src);
+      });
+    });
+  });
+  if(!ids.size){ try{ localStorage.setItem(IDB_CLOUD_BACKFILL_KEY,'1'); }catch(e){} return; }
+  Promise.all([...ids].map(id=>
+    idbGetLocal(id)
+      .then(dataUrl=>{ if(dataUrl) return cloudPutImage(id,dataUrl); })
+      .catch(e=>console.warn('[graphic-img-sync] 补传检查本地图片失败：', id, e))
+  )).then(()=>{ try{ localStorage.setItem(IDB_CLOUD_BACKFILL_KEY,'1'); }catch(e){} });
 }
 /* 渲染图片：IDB ID → blob URL → <img>（支持 base64 兼容） */
 async function idbRenderImg(idOrSrc){
@@ -2901,6 +2928,7 @@ document.addEventListener('click', (e)=>{
 (async function init(){
   state.notes = await loadNotes();
   await saveNotes();
+  backfillImagesToCloud();
   syncModeUI();
   syncStickyBars();
   renderAll();
