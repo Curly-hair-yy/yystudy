@@ -1426,7 +1426,7 @@ function render(){
 function renderCatalogFlyout(){
   const f=document.getElementById('catalogFlyout');
   if(!DATA.categories.length){ f.innerHTML='<div class="pr-flyout-item" style="cursor:default;color:var(--ink-faint)">暂无板块</div>'; return; }
-  f.innerHTML=DATA.categories.map(c=>`<button class="pr-flyout-item ${c.id===UI.activeCat?'active':''}" data-pcat="${c.id}">${esc(c.name)}</button>`).join('');
+  f.innerHTML=DATA.categories.map(c=>`<button class="pr-flyout-item ${c.id===UI.activeCat?'active':''}" draggable="true" data-drag="qcat" data-pcat="${c.id}" title="点击切换 · 按住拖拽调整板块顺序">${esc(c.name)}</button>`).join('');
 }
 
 /* 浏览页左侧 sticky 迷你索引 */
@@ -1612,9 +1612,11 @@ function renderMain(){
   }
 }
 
-/* ================= 拖拽排序（速查索引 / 目录，限定在同一模块内调整知识点顺序） =================
+/* ================= 拖拽排序（速查索引 / 目录页知识点，限定同一模块内；目录 flyout 里的板块，顶层任意调整） =================
    手柄图标（⠿）+ hover 显示 + 拖拽时半透明 + 落点位置用 box-shadow 高亮，
-   和知识点内部内容块（公式/口诀/例题/tips）拖拽排序复用同一套视觉/交互约定 */
+   和知识点内部内容块（公式/口诀/例题/tips）拖拽排序复用同一套视觉/交互约定。
+   板块（qcat）沿用 tool-notebook.html 里 .catpill 的写法：整个按钮本身可拖拽，不额外加手柄，
+   因为按钮本来就要承担"点击切换板块"的职责，加根手柄反而占地方 */
 let qDragState = null;
 function qClearDropMarkers(){
   document.querySelectorAll('.drop-before,.drop-after,.drop-left,.drop-right').forEach(el=>
@@ -1637,10 +1639,16 @@ function qFindDropTarget(e){
     const r = card.getBoundingClientRect();
     return { el:card, pos: e.clientY < r.top + r.height/2 ? 'before':'after' };
   }
+  if(qDragState.kind==='qcat'){
+    const btn = closest('.pr-flyout-item[data-pcat]');
+    if(!btn || btn===qDragState.el) return null;
+    const r = btn.getBoundingClientRect();
+    return { el:btn, pos: e.clientY < r.top + r.height/2 ? 'before':'after' };
+  }
   return null;
 }
 document.addEventListener('dragstart', e=>{
-  const h = e.target.closest && e.target.closest('[data-drag="idx-point"],[data-drag="qpoint"]');
+  const h = e.target.closest && e.target.closest('[data-drag="idx-point"],[data-drag="qpoint"],[data-drag="qcat"]');
   if(!h) return;
   const kind = h.dataset.drag;
   if(kind==='idx-point'){
@@ -1655,6 +1663,9 @@ document.addEventListener('dragstart', e=>{
     if(!grpEl) return;
     qDragState = { kind, pid:card.dataset.pt, gid:grpEl.dataset.grp, el:card };
     try{ e.dataTransfer.setDragImage(card, 30, 20); }catch(err){}
+  } else if(kind==='qcat'){
+    qDragState = { kind, pid:h.dataset.pcat, el:h };
+    try{ e.dataTransfer.setDragImage(h, 20, 12); }catch(err){}
   } else return;
   e.dataTransfer.effectAllowed = 'move';
   try{ e.dataTransfer.setData('text/plain',''); }catch(err){}
@@ -1678,7 +1689,7 @@ document.addEventListener('drop', e=>{
   qDragState = null;
   if(!t) return;
   e.preventDefault();
-  qDropPoint(st, t);
+  if(st.kind==='qcat') qDropCategory(st, t); else qDropPoint(st, t);
 });
 document.addEventListener('dragend', ()=>{
   qClearDropMarkers();
@@ -1697,6 +1708,19 @@ function qDropPoint(st, t){
   g.points.splice(t.pos==='after'? to+1 : to, 0, moved);
   saveData();
   if(UI.mode==='index') renderIndex(); else renderMain();
+}
+/* 大模块（板块）排序：拖拽目录 flyout 里的板块按钮，调整 DATA.categories 顶层顺序，
+   速查索引页也是直接遍历这个数组渲染的，顺带一起跟着调整，不用额外同步 */
+function qDropCategory(st, t){
+  const from = DATA.categories.findIndex(c=>c.id===st.pid);
+  const toId = t.el.dataset.pcat;
+  if(from<0 || st.pid===toId) return;
+  pushUndo();
+  const [moved] = DATA.categories.splice(from,1);
+  const to = DATA.categories.findIndex(c=>c.id===toId);
+  DATA.categories.splice(t.pos==='after'? to+1 : to, 0, moved);
+  saveData();
+  render();
 }
 
 function renderMistake(m){
