@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-07-30
+
+- 修复 tool-quant.html 遗留的表格渲染问题，逐个实际打开知识点核对后再动手改，未凭猜测：
+  1. `renderShapeFormula()`（约 998 行）入场早退条件 `if(!/[一-鿿]{2,4}[：:]/.test(formula)) return fracRender(formula);` 要求内容里必须先出现"中文词+冒号"，而 p_pingfangshu 的 formula 是纯数字加 `|`/`||` 分隔、完全没有冒号，被这行直接挡在门外。改成 `if(!formula.includes('||')&&!/[一-鿿]{2,4}[：:]/.test(formula))`，让含 `||` 的内容也能继续往下走判断。核对过全库唯三个含 `||` 的 formula 字段（p_dengcha_dengbi / p_pingfangshu / p_rc_daigongshi），另外两个本来就有"项目：..."匹配得到中文词+冒号，改动不影响它们，零回归风险。
+  2. 排查过程中发现 p_pingfangshu 表格实际不渲染的直接原因并不是这条早退逻辑本身（那条判断在真正的 fresh load 下完全正确），而是当天早些时候给 tool-quant.html 接入 `cloud-localstorage-sync.js` 做同步验证测试时，测试用的浏览器环境里 `DATA` 对象不知从哪个环节混入了真实换行符，把 `p_pingfangshu`/`p_dengcha_dengbi`/`p_rc_daigongshi` 三个 formula 里所有的 `||` 拆成了 `|\n|`，测试编辑保存时把这份被污染的数据当成"用户的真实修改"同步到了 Supabase 云端——用同一套 loadData() 管线反复用干净的全新 fetch 复现两次均无法重现这个换行，确认不是当前代码逻辑的 bug，而是那次测试会话独有的一次性数据污染；已用干净的重新 loadData() 结果覆盖回云端，云端现在三个字段均确认不含换行。
+  3. 把 `patchFormulaFields()`（约 843 行）的比对方式从"猜一个旧版本文本去比对、猜对了才覆盖"改成"只要当前内容不等于 quant-data.json 里定义的最新版本就直接强制覆盖"——上一次给 p_rc_daigongshi 猜的旧文本本来就和实际缓存内容对不上，补丁完全没生效。这三个知识点的公式都是有唯一正确答案的客观事实，不太可能是用户手动编辑出一个"像旧版但其实是自己写的"内容，强制收敛更可靠，也顺带能自愈类似第 2 条那种意外混入的缓存损坏。
+  4. 新增知识点 p_zhengchu_teshu（整除，利用整除特性解纯整除问题）的 formula 原来用"→"箭头分隔（如"3→各位数字和是3的倍数"），触发不了冒号 kv 表格解析。已在 `data/quant-data.json` 里改成冒号分隔的两列表格格式（"项目：判定方法；3：各位数字和是3的倍数；..."），并把它也加入 `patchFormulaFields()` 的强制收敛列表，确保已经缓存过旧箭头格式的设备/浏览器下次加载也能自动迁移到新格式，不用等用户手动清缓存。
+  5. `.formula-table .ft-formula`（公式单元格）字体从 `var(--serif)` 改成 `var(--mono)`（和同一张表的表头字体保持一致，此前表头/表身字体不统一），并针对表格内的 `sup`/`sub`/`.frac` 单独加了字号、字距、外边距的微调，让上标下标不再挤在一起；改动只加在 `.formula-table .ft-formula` 这个选择器范围内，没有碰全站的 `sup,sub{...}` 全局规则，也没有动 CLAUDE.md 里要求统一 `--serif` 的其它任何地方。
+  - 全部改动在浏览器里逐个实际打开了 整除/等差等比/平方数/容斥 四个知识点核对，确认表格结构、内容、字体都正确渲染（截图确认二列对照表、平方数网格表、容斥两组对照表均正常）。
+- 新增 tool-quant.html「速查索引」和「目录」两个页面的知识点拖拽排序功能，复用知识点内部内容块拖拽排序的同一套视觉/交互约定（⠿ 手柄图标、hover 才显示、拖拽时半透明、落点用 box-shadow 高亮），限定在同一模块（分组）内调整知识点顺序，不支持跨模块拖拽（已用真实拖拽事件验证：跨模块拖拽会被直接忽略，两侧顺序都不变）：
+  - 速查索引页：每个知识点条目（`.index-point-item`）左侧新增 hover 显示的拖拽手柄，横向布局按左右半区判定插入位置（复用 `.catpill` 那种左右拖拽的视觉），拖拽时同步保留搜索过滤的显示/隐藏逻辑。
+  - 目录页：每张知识点卡片标题区新增拖拽手柄，纵向布局按上下半区判定插入位置。
+  - 排序结果写回 `g.points` 数组并调用已有的 `saveData()`，和刚接入的 `cloud-localstorage-sync.js` 走同一条 `localStorage.setItem` 拦截路径同步到云端，没有另起同步机制；同时接入撤销栈（`pushUndo()`），Ctrl+Z 可撤销排序操作。
+  - 用页面内直接派发 `DragEvent`（`dragstart`/`dragover`/`drop`/`dragend`，携带真实 `DataTransfer`）而不是模拟鼠标拖拽的方式验证了拖拽逻辑本身（在这个沙箱浏览器环境里用鼠标模拟真实拖拽不稳定），覆盖了：同模块内前移/后移、撤销恢复、跨模块拖拽被正确拒绝、`localStorage` 落盘、真实刷新页面后顺序保留；测试用的顺序调整验证完之后已撤销/恢复成 quant-data.json 原始顺序，云端未留测试痕迹。
+
 ## 2026-07-29
 
 - 排查 tool-graphic.html 图片补传（`backfillImagesToCloud`）是否真的执行过：直接查 Supabase 发现 `tool_name=graphic` 下 `tuitui-img__*` 一条都没有，但 `tkimg_cloud_backfilled` 完成标记却已经是 `'1'`——对比时间戳发现这个标记是在补传功能那次提交（`da840a9`，当天 19:21:06 本地时间）**之前**几分钟就被写入云端的，说明当时是在一个本机 IndexedDB 里没有真实图片的空环境（例如测试用的浏览器）里跑过一次 `init()`，`backfillImagesToCloud()` 扫到 0 张本地图片就直接把"已完成"标记写了下去。这个标记同样会被 `cloud-localstorage-sync.js` 当成普通 localStorage key 全量同步（`data-exclude-prefix` 只排除了 `tuitui-notes`，没排除这个 key），意味着往后不管谁在哪个设备打开页面，只要云端有这条"已完成"记录，`cloud-localstorage-sync.js` 启动时的预拉取就会把这个假的"已完成"状态灌回本地，`backfillImagesToCloud()` 一看标记已存在直接 return，真正持有图片的那台设备再也没有机会触发真实补传——这是一个会一直卡住的死锁,不是"还没跑过"那么简单。已从 Supabase 删除这条错误标记（`tool_name=graphic&data_key=tkimg_cloud_backfilled`），确认删除后云端该 key 不存在；后续验证优化项时用沙箱浏览器又误触发了一次同样的空跑，已再次清除并确认为最终状态。真正的补传需要用户在持有本地老图片的那台 Chrome 里重新打开一次 `tool-graphic.html` 才会执行；如果那台 Chrome 此前也曾打开过页面并把这条假标记同步下去过，需要额外在该浏览器 devtools 里执行一次 `localStorage.removeItem('tkimg_cloud_backfilled')` 再刷新，标记才会真正清零。

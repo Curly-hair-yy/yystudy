@@ -111,6 +111,20 @@
   .index-point-link:hover{color:var(--accent-hover);text-decoration:underline;text-underline-offset:3px;}
   .index-point-sep{color:var(--border-strong);font-size:11px;}
 
+  /* 拖拽排序（速查索引/目录，同一模块内调整知识点顺序）：手柄图标 + hover 显示，
+     和知识点内部内容块拖拽复用同一套视觉/交互约定 */
+  .drag-handle{display:inline-flex;align-items:center;justify-content:center;width:14px;height:18px;font-size:12px;color:var(--ink-faint);cursor:grab;user-select:none;opacity:0;transition:opacity .12s;line-height:1;flex:none;}
+  .drag-handle:hover{color:var(--ink);}
+  .drag-handle:active{cursor:grabbing;}
+  .dragging{opacity:.35;}
+  .drop-before{box-shadow:0 -3px 0 0 var(--accent) !important;}
+  .drop-after{box-shadow:0 3px 0 0 var(--accent) !important;}
+  .drop-left{box-shadow:-3px 0 0 0 var(--accent) !important;}
+  .drop-right{box-shadow:3px 0 0 0 var(--accent) !important;}
+  .index-point-item{display:inline-flex;align-items:center;gap:1px;}
+  .index-point-item .drag-handle{width:11px;}
+  .index-point-item:hover .drag-handle{opacity:1;}
+
   /* 卡片底部操作行 */
   .pk-actionrow{margin-top:14px;font-size:12.5px;display:flex;align-items:center;gap:0;}
   .pk-actionrow .addhere{color:var(--accent);font-weight:600;cursor:pointer;background:none;border:none;padding:0;font-size:12.5px;font-family:var(--serif);}
@@ -142,6 +156,8 @@
   .card:last-child{border-bottom:none;}
   .card-top{margin-bottom:8px;}
   .card-top h3{font-family:var(--serif);font-weight:800;margin:0;font-size:calc(17px*var(--font-scale));color:var(--ink);display:flex;align-items:center;gap:10px;}
+  .card-top h3 .drag-handle{margin-right:-4px;}
+  .card:hover .card-top h3 .drag-handle{opacity:1;}
   .card-tag{font-family:var(--mono);font-size:9.5px;color:var(--accent);border:1px solid var(--accent);border-radius:5px;padding:2px 7px;font-weight:700;letter-spacing:.5px;flex:none;margin-right:6px;}
   .iconbtn{border:none;background:transparent;color:var(--ink-faint);cursor:pointer;padding:5px 6px;border-radius:6px;font-size:13px;line-height:1;}
   .iconbtn:hover{background:transparent;color:var(--accent-hover);}
@@ -166,7 +182,11 @@
   .formula-table tbody tr:nth-child(even) td{background:var(--surface-alt);}
   .formula-table .ft-shape{display:flex;align-items:center;gap:8px;font-weight:700;white-space:nowrap;}
   .formula-table .ft-shape .shape-icon{flex:none;}
-  .formula-table .ft-formula{font-family:var(--serif);font-weight:500;}
+  .formula-table .ft-formula{font-family:var(--mono);font-weight:500;line-height:1.8;letter-spacing:.2px;}
+  .formula-table .ft-formula sup,.formula-table .ft-formula sub{font-size:.8em;letter-spacing:.3px;}
+  .formula-table .ft-formula sup{margin:0 1px 0 .5px;}
+  .formula-table .ft-formula sub{margin:0 1px 0 .5px;}
+  .formula-table .ft-formula .frac{margin:0 3px;}
   .formula-table-group{display:flex;flex-direction:column;gap:12px;}
   .formula-table-group .formula-table{margin:0;}
   .formula-grid td{text-align:center;width:20%;}
@@ -819,45 +839,29 @@ function doRedo(){
 async function saveData(){
   try{ localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); }catch(e){}
 }
-/* 定向内容补丁：修复三个知识点的 formula 字段
- *   问题：quant-data.json 已修复但 localStorage 缓存着旧版本，且旧缓存可能已通过
- *   cloud-localstorage-sync.js 同步到其它设备，导致表格不渲染。
- *   策略：直接比对内容（不用全局迁移标记位，避免标记位被同步到其它设备导致
- *   死锁 — 参考图推那次「完成标记被错误同步」的教训）。
- *   仅当 formula 与已知旧版完全一致时才覆盖（说明用户未手动编辑该字段）；
- *   不一致则跳过（用户可能自己改过，或已是新版）。 */
+/* 定向内容补丁：强制收敛四个「有唯一正确答案」的公式知识点的 formula 字段
+ *   这几个知识点的公式内容是客观事实（数列公式、平方数表、容斥公式、整除判定），
+ *   不太可能是用户手动改出一个「看起来像旧版但其实是自己写的」内容，所以不用去比对
+ *   某个猜测的「旧版本文本」——之前给 p_rc_daigongshi 猜的旧文本就和实际缓存内容对不上，
+ *   补丁完全没生效。改成只要当前内容不等于 quant-data.json 里定义的最新版本就直接覆盖，
+ *   更可靠，也能顺带修复任何未预料到的缓存损坏（例如同步链路里意外混入的空白字符）。 */
 function patchFormulaFields(DATA){
-  // 旧版（有问题的）formula 文本 → 新版（quant-data.json 当前正确内容）
-  var PATCHES = [
-    {
-      id: 'p_dengcha_dengbi',
-      old: '项目：通项公式；等差数列：aₙ=a₁+(n-1)d；等比数列：aₙ=a₁×qⁿ⁻¹||项目：求和公式；等差数列：Sₙ=n(a₁+aₙ)[[n(a₁+aₙ)/2]]；等比数列：Sₙ=a₁(1-qⁿ)[[a₁(1-qⁿ)/(1-q)]]||项目：中项性质；等差数列：若m+n=k+i，则aₘ+aₙ=aₖ+aᵢ；等比数列：若m+n=k+i，则aₘ·aₙ=aₖ·aᵢ',
-      'new': '项目：等差数列；通项公式：a~1~+(n-1)d；求和公式：n(a~1~+a~n~)/2；中项性质：若m+n=k+i，则a~m~+a~n~=a~k~+a~i~||项目：等比数列；通项公式：a~1~×q^n-1^；求和公式：a~1~(1-q^n^)/(1-q)；中项性质：若m+n=k+i，则a~m~·a~n~=a~k~·a~i~'
-    },
-    {
-      id: 'p_pingfangshu',
-      old: '1²=1|2²=4|3²=9|4²=16|5²=25||6²=36|7²=49|8²=64|9²=81|10²=100||11²=121|12²=144|13²=169|14²=196|15²=225||16²=256|17²=289|18²=324|19²=361|20²=400',
-      'new': '1²=1|2²=4|3²=9|4²=16|5²=25||6²=36|7²=49|8²=64|9²=81|10²=100||11²=121|12²=144|13²=169|14²=196|15²=225||16²=256|17²=289|18²=324|19²=361|20²=400'
-    },
-    {
-      id: 'p_rc_daigongshi',
-      old: '总人数－圈外部分＝总人次－重复部分；　0次+1次+2次+3次＝总人数',
-      'new': '项目：两个圈；文字表达：总人数-都不满足人数=两圈人数之和-都满足人数；公式：总-两不=A+B-AB||项目：三个圈；文字表达：总人数-都不满足人数=三圈人数之和-只满足两项人数-2×都满足人数；公式：总-三不=A+B+C-AB-AC-BC+ABC'
-    }
-  ];
+  var CANON = {
+    p_dengcha_dengbi: '项目：等差数列；通项公式：a~1~+(n-1)d；求和公式：n(a~1~+a~n~)/2；中项性质：若m+n=k+i，则a~m~+a~n~=a~k~+a~i~||项目：等比数列；通项公式：a~1~×q^n-1^；求和公式：a~1~(1-q^n^)/(1-q)；中项性质：若m+n=k+i，则a~m~·a~n~=a~k~·a~i~',
+    p_pingfangshu: '1²=1|2²=4|3²=9|4²=16|5²=25||6²=36|7²=49|8²=64|9²=81|10²=100||11²=121|12²=144|13²=169|14²=196|15²=225||16²=256|17²=289|18²=324|19²=361|20²=400',
+    p_rc_daigongshi: '项目：两个圈；文字表达：总人数-都不满足人数=两圈人数之和-都满足人数；公式：总-两不=A+B-AB||项目：三个圈；文字表达：总人数-都不满足人数=三圈人数之和-只满足两项人数-2×都满足人数；公式：总-三不=A+B+C-AB-AC-BC+ABC',
+    p_zhengchu_teshu: '项目：判定方法；3：各位数字和是3的倍数；9：各位数字和是9的倍数；5：尾数是0或5；2和5：末位能被2或5整除；4和25：看末两位数；8和125：看末三位数'
+  };
   var changed = false;
-  var patchMap = {};
-  PATCHES.forEach(function(p){ patchMap[p.id] = p; });
   DATA.categories.forEach(function(c){
     c.groups.forEach(function(g){
       g.points.forEach(function(p){
-        var patch = patchMap[p.id];
-        if (!patch) return;
-        if (typeof p.formula === 'string' && p.formula === patch.old){
-          p.formula = patch['new'];
+        var canon = CANON[p.id];
+        if (canon === undefined) return;
+        if (p.formula !== canon){
+          p.formula = canon;
           changed = true;
         }
-        // 内容不一致 → 用户可能手动编辑过，或已是新版，跳过不覆盖
       });
     });
   });
@@ -994,7 +998,7 @@ function renderShapeFormula(formula){
     }
   }
 
-  if(!/[一-鿿]{2,4}[：:]/.test(formula)) return fracRender(formula);
+  if(!formula.includes('||')&&!/[一-鿿]{2,4}[：:]/.test(formula)) return fracRender(formula);
   const parts=formula.split(/[；;]/).map(s=>s.trim()).filter(Boolean);
   if(parts.length<2) return fracRender(formula);
 
@@ -1491,7 +1495,7 @@ function renderIndex(){
               <div class="index-group-row">
                 <div class="index-group-name">${esc(g.name)}</div>
                 <div class="index-points">
-                  ${g.points.map((p,i)=>`<button class="index-point-link" data-ijump="${p.id}">${esc(p.title)}</button>${i<g.points.length-1?'<span class="index-point-sep">·</span>':''}`).join('')}
+                  ${g.points.map((p,i)=>`<span class="index-point-item" data-grp="${g.id}" data-pt="${p.id}"><span class="drag-handle" draggable="true" data-drag="idx-point" title="按住拖拽调整位置">⠿</span><button class="index-point-link" data-ijump="${p.id}">${esc(p.title)}</button></span>${i<g.points.length-1?'<span class="index-point-sep">·</span>':''}`).join('')}
                 </div>
               </div>`).join('')}
           </div>
@@ -1508,7 +1512,7 @@ function renderIndex(){
         let anyVisible=false;
         block.querySelectorAll('.index-group-row').forEach(row=>{
           let rowVisible=false;
-          row.querySelectorAll('.index-point-link').forEach(link=>{ const v=q===''||link.textContent.toLowerCase().includes(q); link.style.display=v?'':'none'; if(v) rowVisible=true; });
+          row.querySelectorAll('.index-point-item').forEach(item=>{ const v=q===''||item.textContent.toLowerCase().includes(q); item.style.display=v?'':'none'; if(v) rowVisible=true; });
           row.querySelectorAll('.index-point-sep').forEach(sep=>{ sep.style.display=rowVisible?'':'none'; });
           row.style.display=rowVisible?'':'none';
           if(rowVisible) anyVisible=true;
@@ -1557,7 +1561,7 @@ function renderMain(){
 
       return `<div class="card" data-pt="${p.id}">
         <div class="card-top">
-          <h3><span class="card-tag">${esc(p.tag||'')}</span>${esc(p.title)}</h3>
+          <h3><span class="drag-handle" draggable="true" data-drag="qpoint" title="按住拖拽调整位置">⠿</span><span class="card-tag">${esc(p.tag||'')}</span>${esc(p.title)}</h3>
         </div>
         ${contentHtml}
         <div class="pk-actionrow">
@@ -1606,6 +1610,93 @@ function renderMain(){
       if(card){ card.scrollIntoView({behavior:'smooth',block:'start'}); card.classList.add('flash'); setTimeout(()=>card.classList.remove('flash'),1200); }
     });
   }
+}
+
+/* ================= 拖拽排序（速查索引 / 目录，限定在同一模块内调整知识点顺序） =================
+   手柄图标（⠿）+ hover 显示 + 拖拽时半透明 + 落点位置用 box-shadow 高亮，
+   和知识点内部内容块（公式/口诀/例题/tips）拖拽排序复用同一套视觉/交互约定 */
+let qDragState = null;
+function qClearDropMarkers(){
+  document.querySelectorAll('.drop-before,.drop-after,.drop-left,.drop-right').forEach(el=>
+    el.classList.remove('drop-before','drop-after','drop-left','drop-right'));
+}
+function qFindDropTarget(e){
+  if(!qDragState) return null;
+  const closest = sel => e.target.closest ? e.target.closest(sel) : null;
+  if(qDragState.kind==='idx-point'){
+    const item = closest('.index-point-item');
+    if(!item || item===qDragState.el || item.dataset.grp!==qDragState.gid) return null;
+    const r = item.getBoundingClientRect();
+    return { el:item, pos: e.clientX < r.left + r.width/2 ? 'before':'after' };
+  }
+  if(qDragState.kind==='qpoint'){
+    const card = closest('.card[data-pt]');
+    if(!card || card===qDragState.el) return null;
+    const grpEl = card.closest('.group');
+    if(!grpEl || grpEl.dataset.grp!==qDragState.gid) return null;
+    const r = card.getBoundingClientRect();
+    return { el:card, pos: e.clientY < r.top + r.height/2 ? 'before':'after' };
+  }
+  return null;
+}
+document.addEventListener('dragstart', e=>{
+  const h = e.target.closest && e.target.closest('[data-drag="idx-point"],[data-drag="qpoint"]');
+  if(!h) return;
+  const kind = h.dataset.drag;
+  if(kind==='idx-point'){
+    const item = h.closest('.index-point-item');
+    if(!item) return;
+    qDragState = { kind, pid:item.dataset.pt, gid:item.dataset.grp, el:item };
+    try{ e.dataTransfer.setDragImage(item, 10, 10); }catch(err){}
+  } else if(kind==='qpoint'){
+    const card = h.closest('.card[data-pt]');
+    if(!card) return;
+    const grpEl = card.closest('.group');
+    if(!grpEl) return;
+    qDragState = { kind, pid:card.dataset.pt, gid:grpEl.dataset.grp, el:card };
+    try{ e.dataTransfer.setDragImage(card, 30, 20); }catch(err){}
+  } else return;
+  e.dataTransfer.effectAllowed = 'move';
+  try{ e.dataTransfer.setData('text/plain',''); }catch(err){}
+  setTimeout(()=>{ if(qDragState && qDragState.el) qDragState.el.classList.add('dragging'); }, 0);
+});
+document.addEventListener('dragover', e=>{
+  if(!qDragState) return;
+  const t = qFindDropTarget(e);
+  qClearDropMarkers();
+  if(!t) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const cls = qDragState.kind==='idx-point' ? (t.pos==='before'?'drop-left':'drop-right') : (t.pos==='before'?'drop-before':'drop-after');
+  t.el.classList.add(cls);
+});
+document.addEventListener('drop', e=>{
+  if(!qDragState) return;
+  const t = qFindDropTarget(e);
+  qClearDropMarkers();
+  const st = qDragState;
+  qDragState = null;
+  if(!t) return;
+  e.preventDefault();
+  qDropPoint(st, t);
+});
+document.addEventListener('dragend', ()=>{
+  qClearDropMarkers();
+  if(qDragState && qDragState.el) qDragState.el.classList.remove('dragging');
+  qDragState = null;
+});
+function qDropPoint(st, t){
+  const g = DATA.categories.flatMap(c=>c.groups).find(g=>g.id===st.gid);
+  if(!g) return;
+  const from = g.points.findIndex(p=>p.id===st.pid);
+  const toId = t.el.dataset.pt;
+  if(from<0 || st.pid===toId) return;
+  pushUndo();
+  const [moved] = g.points.splice(from,1);
+  const to = g.points.findIndex(p=>p.id===toId);
+  g.points.splice(t.pos==='after'? to+1 : to, 0, moved);
+  saveData();
+  if(UI.mode==='index') renderIndex(); else renderMain();
 }
 
 function renderMistake(m){
