@@ -200,6 +200,8 @@ JS 常量：`HL_COLORS = ['mint','rose','cream','khaki','blue']`（tool-translat
 
 9. **不要硬编码 CDN 地址且无 fallback，尤其是 `<script type="module">` + importmap 这种"全有全无"的加载方式**：tool-blocks.html 用户反馈"根本不能用"，本地实测（点击加减方块、拖拽转视角、移动/旋转零件、改色、撤销重做等）却全部正常——因为测试环境能正常访问 `cdn.jsdelivr.net`，而用户的网络环境访问不了。importmap 引入 three.js/OrbitControls 时若 CDN 不可达，整个 module script 会静默完全不执行，所有按钮在 DOM 里都在、看起来正常，但点击零响应，且控制台/页面都不会有任何提示,与用户反馈的"根本不能用"完全吻合。**以后排查"我这边测试都正常,但用户说完全用不了"类反馈，要优先怀疑外部资源加载类问题（CDN、字体、第三方脚本），而不是假设自己复现失败就说明没问题——测试环境的网络可达性不能代表用户的网络环境**。已将 three.js 相关文件 vendor 到 `tools/vendor/three/`，移除运行时 CDN 依赖，其余工具目前都没有类似的运行时 CDN 依赖（Google Fonts 走的是渐进增强，加载失败只是字体降级不影响功能，风险等级不同）。
 
+10. **测试任何会写入 Supabase 云同步的功能之前，必须先在测试浏览器里拦截对 `supabase.co` 的写请求（POST/DELETE），只放行 GET**：2026-07-30 给 tool-quant.html 接入云同步、以及后续排查表格渲染问题时，都在本地空白测试浏览器（localStorage 从零开始）里直接操作了页面，测试过程中的编辑（哪怕后来撤销/清空了）经由 `saveData()` 把整份 `DATA` 推到了 Supabase——而这个云端存储位置和用户真实浏览器共用同一条 `tool_name + data_key` 记录。云同步的设计是"每次打开页面都无条件用云端数据覆盖本地"，没有合并逻辑，所以用户真实浏览器下次打开时，本地已有的真实编辑（工程问题板块 4 个知识点被用户手动拆成了要点、其中一条还带高亮标记）被这份"空白测试用户"产生的云端数据覆盖掉了，用户反馈"编辑的内容不见了，回到了最初的样子"。所幸用户此前手动导出过一份 `导出备份`，凭这份 JSON 逐字段核对、恢复了真实内容（对照过程和恢复方法见 CHANGELOG `2026-07-30`）。**以后测试 tool-notebook.html / tool-graphic.html / tool-translate.html / tool-quant.html 任何会触发 `saveData()`/`localStorage.setItem` 的功能，一律先在测试脚本里装一层 fetch 拦截**（伪代码：`if(url.includes('supabase.co') && method!=='GET') return 假响应`），确保测试环境的编辑/撤销/回退动作不会真的落到生产数据上；确需验证"真的能同步到云端"这类端到端行为时，再有意识地临时放开，测完立刻用真实内容核对云端并按需恢复。
+
 ## 小索引滚动高亮功能
 
 四个工具都实现了左侧 sticky 迷你索引的滚动同步高亮，逻辑统一：
